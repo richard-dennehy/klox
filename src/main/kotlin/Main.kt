@@ -46,3 +46,4 @@ fun reportError(message: String, line: Int) {
     System.err.println("[line $line] Error: $message")
     hadError = true
 }
+

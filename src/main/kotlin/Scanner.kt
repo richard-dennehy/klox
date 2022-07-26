@@ -12,41 +12,41 @@ class Scanner(private val source: String) {
             next = advance()
         }
 
-        tokens.add(Token(EOF, "", line))
+        tokens.add(Token(TokenType.EOF, "", line))
         return tokens.toList()
     }
 
     private fun scanToken(char: Char) {
         val token: TokenType = when (char) {
-            '(' -> Symbol.LeftParenthesis
-            ')' -> Symbol.RightParenthesis
-            '[' -> Symbol.LeftBrace
-            ']' -> Symbol.RightBrace
-            ',' -> Symbol.Comma
-            '.' -> Symbol.Dot
-            '-' -> Symbol.Minus
-            '+' -> Symbol.Plus
-            ';' -> Symbol.Semicolon
-            '*' -> Symbol.Asterisk
+            '(' -> TokenType.LeftParenthesis
+            ')' -> TokenType.RightParenthesis
+            '[' -> TokenType.LeftBrace
+            ']' -> TokenType.RightBrace
+            ',' -> TokenType.Comma
+            '.' -> TokenType.Dot
+            '-' -> TokenType.Minus
+            '+' -> TokenType.Plus
+            ';' -> TokenType.Semicolon
+            '*' -> TokenType.Asterisk
             '!' -> if (match('=')) {
-                Symbol.NotEqual
+                TokenType.NotEqual
             } else {
-                Symbol.Not
+                TokenType.Not
             }
             '=' -> if (match('=')) {
-                Symbol.DoubleEquals
+                TokenType.DoubleEquals
             } else {
-                Symbol.Equals
+                TokenType.Equals
             }
             '>' -> if (match('=')) {
-                Symbol.GreaterThanOrEqual
+                TokenType.GreaterThanOrEqual
             } else {
-                Symbol.GreaterThan
+                TokenType.GreaterThan
             }
             '<' -> if (match('=')) {
-                Symbol.LessThanOrEqual
+                TokenType.LessThanOrEqual
             } else {
-                Symbol.LessThan
+                TokenType.LessThan
             }
             in 'A'..'z', '_' -> identifier()
             in '0'..'9' -> number() ?: return
@@ -57,7 +57,7 @@ class Scanner(private val source: String) {
             } else if (match('*')) {
                 return blockComment()
             } else {
-                Symbol.Slash
+                TokenType.Slash
             }
             ' ', '\r', '\t' -> return
             '\n' -> {
@@ -99,7 +99,7 @@ class Scanner(private val source: String) {
 
         assert(advance() == '"')
         val value = source.substring(start + 1, current - 1)
-        return LoxString(value)
+        return TokenType.LoxString(value)
     }
 
     private fun number(): TokenType? {
@@ -117,7 +117,7 @@ class Scanner(private val source: String) {
                 reportError("Invalid numeric literal $raw", line)
                 null
             }
-            else -> LoxNumber(value)
+            else -> TokenType.LoxNumber(value)
         }
     }
 
@@ -125,7 +125,7 @@ class Scanner(private val source: String) {
         while (peek() in 'A'..'z' || peek() == '_') advance()
 
         val text = source.substring(start, current)
-        return Keyword.values().find { it.ident == text } ?: Identifier(text)
+        return TokenType.Keyword.values().find { it.asString == text } ?: TokenType.Identifier(text)
     }
 
     private tailrec fun blockComment(nesting: Int = 0) {
