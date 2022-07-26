@@ -25,23 +25,23 @@ enum class Symbol : TokenType {
     LessThanOrEqual,
 }
 
-enum class Keyword : TokenType {
-    And,
-    Class,
-    Else,
-    False,
-    Fun,
-    For,
-    If,
-    Nil,
-    Or,
-    Print,
-    Return,
-    Super,
-    This,
-    True,
-    Var,
-    While,
+enum class Keyword(val ident: String) : TokenType {
+    And("and"),
+    Class("class"),
+    Else("else"),
+    False("false"),
+    Fun("fun"),
+    For("for"),
+    If("if"),
+    Nil("nil"),
+    Or("or"),
+    Print("print"),
+    Return("return"),
+    Super("super"),
+    This("this"),
+    True("true"),
+    Var("var"),
+    While("while"),
 }
 
 data class Identifier(val name: String) : TokenType
