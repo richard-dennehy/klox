@@ -36,14 +36,30 @@ fun runPrompt() {
 
 fun run(source: String) {
     val tokens = Scanner(source).scanTokens()
+    val parser = Parser(tokens)
+    val expression = parser.parse()
 
-    for (token in tokens) {
-        println(token)
+    if (expression == null) {
+        if (hadError) {
+            return
+        } else {
+            System.err.println("Expression did not parse, but no error was reported")
+            return
+        }
     }
+
+    println(astDebugString(expression))
 }
 
-fun reportError(message: String, line: Int) {
-    System.err.println("[line $line] Error: $message")
+fun reportError(message: String, line: Int, where: String = "") {
+    System.err.println("[line $line] Error$where: $message")
     hadError = true
 }
 
+fun reportError(token: Token, message: String) {
+    if (token.type == TokenType.EOF) {
+        reportError(message, token.line, " at end")
+    } else {
+        reportError(message, token.line, " at'${token.lexeme}'")
+    }
+}
