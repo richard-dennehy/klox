@@ -16,11 +16,14 @@ fun main(args: Array<String>) {
 }
 
 var hadError = false
+var hadRuntimeError = false
+val interpreter = Interpreter()
 
 fun runFile(path: String) {
     run(Files.readString(Paths.get(path)))
 
     if (hadError) exitProcess(65)
+    if (hadRuntimeError) exitProcess(70)
 }
 
 fun runPrompt() {
@@ -48,18 +51,23 @@ fun run(source: String) {
         }
     }
 
-    println(astDebugString(expression))
+    println(interpreter.interpret(expression))
 }
 
-fun reportError(message: String, line: Int, where: String = "") {
+fun reportParseError(message: String, line: Int, where: String = "") {
     System.err.println("[line $line] Error$where: $message")
     hadError = true
 }
 
-fun reportError(token: Token, message: String) {
+fun reportParseError(token: Token, message: String) {
     if (token.type == TokenType.EOF) {
-        reportError(message, token.line, " at end")
+        reportParseError(message, token.line, " at end")
     } else {
-        reportError(message, token.line, " at'${token.lexeme}'")
+        reportParseError(message, token.line, " at'${token.lexeme}'")
     }
+}
+
+fun reportRuntimeError(error: LoxRuntimeError) {
+    System.err.println("${error.message}\n[line ${error.token.line}]")
+    hadRuntimeError = true
 }

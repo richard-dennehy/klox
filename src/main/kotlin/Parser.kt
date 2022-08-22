@@ -34,7 +34,7 @@ class Parser(private val tokens: List<Token>) {
 
     private fun unary(): Expression {
         val token = match(TokenType.Not, TokenType.Minus) ?: return primary()
-        return Expression.Unary(token, unary())
+        return Expression.Unary(token.first, unary(), token.second)
     }
 
     private fun binary(operand: () -> Expression, vararg operators: TokenType.BinaryOp): Expression {
@@ -43,7 +43,7 @@ class Parser(private val tokens: List<Token>) {
         var operator = nextMatch()
 
         while (operator != null) {
-            expr = Expression.Binary(expr, operator, operand())
+            expr = Expression.Binary(expr, operator.first, operand(), operator.second)
             operator = nextMatch()
         }
 
@@ -51,36 +51,37 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun primary(): Expression {
-        val literal = match(TokenType.Keyword.True, TokenType.Keyword.False, TokenType.Keyword.Nil)
+        val literal = match(TokenType.KeywordLiteral.True, TokenType.KeywordLiteral.False, TokenType.KeywordLiteral.Nil)
         if (literal != null) {
-            return Expression.Literal(literal)
+            return Expression.Literal(literal.first, literal.second)
         }
 
         val next = peek() ?: parseError("Unexpected EOF in expression.")
         if (next.type is TokenType.LoxString) {
             advance()
-            return Expression.Literal(next.type)
+            return Expression.Literal(next.type, next.line)
         }
 
         if (next.type is TokenType.LoxNumber) {
             advance()
-            return Expression.Literal(next.type)
+            return Expression.Literal(next.type, next.line)
         }
 
         if (next.type == TokenType.LeftParenthesis) {
+            advance()
             val grouped = expression()
             consume(TokenType.RightParenthesis, "Expected ')' after grouped expression.")
-            return Expression.Grouping(grouped)
+            return Expression.Grouping(grouped, next.line)
         }
 
         parseError("Expected expression.")
     }
 
-    private fun <T : TokenType> match(vararg tokens: T): T? {
+    private fun <T : TokenType> match(vararg tokens: T): Pair<T, Int>? {
         for (token in tokens) {
             if (check(token)) {
-                advance()
-                return token
+                val matched = advance()!!
+                return token to matched.line
             }
         }
 
@@ -110,7 +111,7 @@ class Parser(private val tokens: List<Token>) {
     private fun peek(): Token? = tokens.getOrNull(current)
 
     private fun parseError(errorMessage: String): Nothing {
-        reportError(peek() ?: tokens.last(), errorMessage)
+        reportParseError(peek() ?: tokens.last(), errorMessage)
         throw ParseError()
     }
 

@@ -33,21 +33,25 @@ class Scanner(private val source: String) {
             } else {
                 TokenType.Not
             }
+
             '=' -> if (match('=')) {
                 TokenType.DoubleEquals
             } else {
                 TokenType.Equals
             }
+
             '>' -> if (match('=')) {
                 TokenType.GreaterThanOrEqual
             } else {
                 TokenType.GreaterThan
             }
+
             '<' -> if (match('=')) {
                 TokenType.LessThanOrEqual
             } else {
                 TokenType.LessThan
             }
+
             in 'A'..'z', '_' -> identifier()
             in '0'..'9' -> number() ?: return
             '"' -> string() ?: return
@@ -59,13 +63,15 @@ class Scanner(private val source: String) {
             } else {
                 TokenType.Slash
             }
+
             ' ', '\r', '\t' -> return
             '\n' -> {
                 line++
                 return
             }
+
             else -> {
-                reportError("Unexpected character.", line)
+                reportParseError("Unexpected character.", line)
                 return
             }
         }
@@ -93,7 +99,7 @@ class Scanner(private val source: String) {
         }
 
         if (peek() == null) {
-            reportError("Unterminated string.", line)
+            reportParseError("Unterminated string.", line)
             return null
         }
 
@@ -114,9 +120,10 @@ class Scanner(private val source: String) {
         val raw = source.substring(start, current)
         return when (val value = raw.toDoubleOrNull()) {
             null -> {
-                reportError("Invalid numeric literal $raw", line)
+                reportParseError("Invalid numeric literal $raw", line)
                 null
             }
+
             else -> TokenType.LoxNumber(value)
         }
     }
@@ -125,7 +132,9 @@ class Scanner(private val source: String) {
         while (peek() in 'A'..'z' || peek() == '_') advance()
 
         val text = source.substring(start, current)
-        return TokenType.Keyword.values().find { it.asString == text } ?: TokenType.Identifier(text)
+        return TokenType.Keyword.values().find { it.asString == text }
+            ?: TokenType.KeywordLiteral.values().find { it.asString == text }
+            ?: TokenType.Identifier(text)
     }
 
     private tailrec fun blockComment(nesting: Int = 0) {
@@ -137,6 +146,7 @@ class Scanner(private val source: String) {
                 '*' -> if (match('/')) {
                     return blockComment(nesting = nesting - 1)
                 }
+
                 '/' -> if (match('*')) {
                     return blockComment(nesting = nesting + 1)
                 }

@@ -1,3 +1,4 @@
+// TODO try changing this to `data class Token<T: TokenType>(val type: T, val lexeme: String, val line: Int)` to maybe simplify the rest of the code
 data class Token(val type: TokenType, val lexeme: String, val line: Int)
 
 sealed interface TokenType {
@@ -10,10 +11,12 @@ sealed interface TokenType {
     sealed interface Literal : TokenType
     data class Identifier(override val asString: String) : Literal
 
-    data class LoxString(override val asString: String) : Literal
+    data class LoxString(val value: String) : Literal {
+        override val asString = "\"${value}\""
+    }
 
-    data class LoxNumber(val value: Double) : Literal {
-        override val asString: String = value.toString()
+    data class LoxNumber(val asDouble: Double) : Literal {
+        override val asString: String = asDouble.toString()
     }
 
     sealed interface BinaryOp : TokenType
@@ -40,22 +43,25 @@ sealed interface TokenType {
     object LessThan : Symbol("<"), BinaryOp
     object LessThanOrEqual : Symbol("<="), BinaryOp
 
-    enum class Keyword(override val asString: String) : Literal {
+    enum class Keyword(override val asString: String): TokenType {
         And("and"),
         Class("class"),
         Else("else"),
-        False("false"),
         Fun("fun"),
         For("for"),
         If("if"),
-        Nil("nil"),
         Or("or"),
         Print("print"),
         Return("return"),
         Super("super"),
         This("this"),
-        True("true"),
         Var("var"),
         While("while"),
+    }
+
+    enum class KeywordLiteral(override val asString: String): Literal {
+        False("false"),
+        Nil("nil"),
+        True("true"),
     }
 }
