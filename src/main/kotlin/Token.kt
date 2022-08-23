@@ -11,9 +11,7 @@ sealed interface TokenType {
     sealed interface Literal : TokenType
     data class Identifier(override val asString: String) : Literal
 
-    data class LoxString(val value: String) : Literal {
-        override val asString = "\"${value}\""
-    }
+    data class LoxString(override val asString: String) : Literal
 
     data class LoxNumber(val asDouble: Double) : Literal {
         override val asString: String = asDouble.toString()
