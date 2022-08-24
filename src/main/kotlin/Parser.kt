@@ -2,13 +2,18 @@ import java.lang.RuntimeException
 
 class Parser(private val tokens: List<Token>) {
     class ParseError : RuntimeException("Parse error")
+    private var errors = ParseErrors(mutableListOf())
 
-    fun parse(): Expression? {
-        return try {
+    fun parse(): ParseResult {
+        errors.underlying.clear()
+
+        val expression = try {
             expression()
         } catch (error: ParseError) {
             null
         }
+
+        return ParseResult(expression, errors.asList())
     }
 
     private var current = 0
@@ -111,7 +116,7 @@ class Parser(private val tokens: List<Token>) {
     private fun peek(): Token? = tokens.getOrNull(current)
 
     private fun parseError(errorMessage: String): Nothing {
-        reportParseError(peek() ?: tokens.last(), errorMessage)
+        errors.recordError(peek() ?: tokens.last(), errorMessage)
         throw ParseError()
     }
 
@@ -137,5 +142,25 @@ class Parser(private val tokens: List<Token>) {
                 token = advance()
             }
         }
+    }
+}
+
+data class ParseResult(val expression: Expression?, val errors: List<String>)
+
+class ParseErrors(internal var underlying: MutableList<String>) {
+    internal fun recordError(message: String, line: Int, where: String = "") {
+        underlying.add("[line $line] Error$where: $message")
+    }
+
+    internal fun recordError(token: Token, message: String) {
+        if (token.type == TokenType.EOF) {
+            recordError(message, token.line, " at end")
+        } else {
+            recordError(message, token.line, " at'${token.lexeme}'")
+        }
+    }
+
+    fun asList(): List<String> {
+        return underlying.toList()
     }
 }

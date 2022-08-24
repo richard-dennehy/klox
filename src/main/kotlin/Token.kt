@@ -1,4 +1,3 @@
-// TODO try changing this to `data class Token<T: TokenType>(val type: T, val lexeme: String, val line: Int)` to maybe simplify the rest of the code
 data class Token(val type: TokenType, val lexeme: String, val line: Int)
 
 sealed interface TokenType {

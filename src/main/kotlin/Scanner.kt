@@ -1,10 +1,12 @@
+// TODO this interface would make more sense as a function (maybe backed by a private class) since it can only be run once
 class Scanner(private val source: String) {
     private val tokens: MutableList<Token> = mutableListOf()
     private var start = 0
     private var current = 0
     private var line = 1
+    private val parseErrors = ParseErrors(mutableListOf())
 
-    fun scanTokens(): List<Token> {
+    fun scanTokens(): ScanResult {
         var next = advance()
         while (next != null) {
             scanToken(next)
@@ -13,7 +15,7 @@ class Scanner(private val source: String) {
         }
 
         tokens.add(Token(TokenType.EOF, "", line))
-        return tokens.toList()
+        return ScanResult(tokens.toList(), parseErrors.asList())
     }
 
     private fun scanToken(char: Char) {
@@ -71,7 +73,7 @@ class Scanner(private val source: String) {
             }
 
             else -> {
-                reportParseError("Unexpected character.", line)
+                parseErrors.recordError("Unexpected character.", line)
                 return
             }
         }
@@ -99,7 +101,7 @@ class Scanner(private val source: String) {
         }
 
         if (peek() == null) {
-            reportParseError("Unterminated string.", line)
+            parseErrors.recordError("Unterminated string.", line)
             return null
         }
 
@@ -120,7 +122,7 @@ class Scanner(private val source: String) {
         val raw = source.substring(start, current)
         return when (val value = raw.toDoubleOrNull()) {
             null -> {
-                reportParseError("Invalid numeric literal $raw", line)
+                parseErrors.recordError("Invalid numeric literal $raw", line)
                 null
             }
 
@@ -154,3 +156,5 @@ class Scanner(private val source: String) {
         }
     }
 }
+
+data class ScanResult(val tokens: List<Token>, val errors: List<String>)

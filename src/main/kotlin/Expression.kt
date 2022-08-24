@@ -34,14 +34,12 @@ fun astDebugString(expr: Expression): String {
 }
 
 class Interpreter {
-    fun interpret(expr: Expression): String? {
-        try {
-            return stringify(evaluate(expr))
-        } catch (error: LoxRuntimeError) {
-            reportRuntimeError(error)
+    fun interpret(expr: Expression): InterpreterResult {
+        return try {
+            InterpreterResult.Success(stringify(evaluate(expr)))
+        } catch (error: InterpreterResult.Error) {
+            error
         }
-
-        return null
     }
 
     private fun stringify(value: Expression.Literal): String {
@@ -57,14 +55,14 @@ class Interpreter {
         fun expectDouble(value: Expression.Literal, context: TokenType, sourceLine: Int): Double {
             return when (value.lit) {
                 is TokenType.LoxNumber -> value.lit.asDouble
-                else -> throw LoxRuntimeError(Token(context, context.asString, sourceLine), "Operand must be a number")
+                else -> throw InterpreterResult.Error(Token(context, context.asString, sourceLine), "Operand must be a number")
             }
         }
 
         fun expectString(value: Expression.Literal, context: TokenType, sourceLine: Int): String {
             return when (value.lit) {
                 is TokenType.LoxString -> value.lit.asString
-                else -> throw LoxRuntimeError(Token(context, context.asString, sourceLine), "Operand must be a string")
+                else -> throw InterpreterResult.Error(Token(context, context.asString, sourceLine), "Operand must be a string")
             }
         }
 
@@ -126,7 +124,7 @@ class Interpreter {
                         when (left.lit) {
                             is TokenType.LoxNumber -> TokenType.LoxNumber(left.lit.asDouble + expectDouble(right, expr.op, expr.sourceLine))
                             is TokenType.LoxString -> TokenType.LoxString(left.lit.asString + expectString(right, expr.op, expr.sourceLine))
-                            else -> throw LoxRuntimeError(
+                            else -> throw InterpreterResult.Error(
                                 Token(expr.op, expr.op.asString, expr.sourceLine),
                                 "Operand must be a string or a number"
                             )
@@ -172,4 +170,7 @@ class Interpreter {
     }
 }
 
-data class LoxRuntimeError(val token: Token, override val message: String?) : RuntimeException()
+sealed interface InterpreterResult {
+    data class Success(val data: String) : InterpreterResult
+    data class Error(val token: Token, override val message: String?) : RuntimeException(), InterpreterResult
+}

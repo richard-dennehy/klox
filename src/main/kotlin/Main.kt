@@ -15,15 +15,17 @@ fun main(args: Array<String>) {
     }
 }
 
-var hadError = false
-var hadRuntimeError = false
-val interpreter = Interpreter()
+private val interpreter = Interpreter()
 
 fun runFile(path: String) {
-    run(Files.readString(Paths.get(path)))
+    val result = run(Files.readString(Paths.get(path)))
+    result.print()
 
-    if (hadError) exitProcess(65)
-    if (hadRuntimeError) exitProcess(70)
+    when (result) {
+        is RunResult.InterpreterError -> exitProcess(70)
+        is RunResult.ParseError -> exitProcess(65)
+        is RunResult.Success -> {}
+    }
 }
 
 fun runPrompt() {
@@ -32,42 +34,41 @@ fun runPrompt() {
     while (true) {
         print("> ")
         val line = reader.readLine() ?: break
-        run(line)
-        hadError = false
+        // keep running after errors
+        run(line).print()
     }
 }
 
-fun run(source: String) {
-    val tokens = Scanner(source).scanTokens()
-    val parser = Parser(tokens)
-    val expression = parser.parse()
+fun run(source: String): RunResult {
+    val scanResult = Scanner(source).scanTokens()
+    val parseResult = Parser(scanResult.tokens).parse()
 
-    if (expression == null) {
-        if (hadError) {
-            return
+    return if (scanResult.errors.isEmpty() && parseResult.errors.isEmpty()) {
+        if (parseResult.expression != null) {
+            when (val result = interpreter.interpret(parseResult.expression)) {
+                is InterpreterResult.Success -> RunResult.Success(result.data)
+                is InterpreterResult.Error -> {
+                    RunResult.InterpreterError("${result.message}\n[line ${result.token.line}]")
+                }
+            }
         } else {
-            System.err.println("Expression did not parse, but no error was reported")
-            return
+            RunResult.Success("")
         }
-    }
-
-    println(interpreter.interpret(expression))
-}
-
-fun reportParseError(message: String, line: Int, where: String = "") {
-    System.err.println("[line $line] Error$where: $message")
-    hadError = true
-}
-
-fun reportParseError(token: Token, message: String) {
-    if (token.type == TokenType.EOF) {
-        reportParseError(message, token.line, " at end")
     } else {
-        reportParseError(message, token.line, " at'${token.lexeme}'")
+        RunResult.ParseError(scanResult.errors + parseResult.errors)
     }
 }
 
-fun reportRuntimeError(error: LoxRuntimeError) {
-    System.err.println("${error.message}\n[line ${error.token.line}]")
-    hadRuntimeError = true
+sealed interface RunResult {
+    fun print()
+
+    data class ParseError(val errors: List<String>): RunResult {
+        override fun print() = errors.forEach(System.err::println)
+    }
+    data class InterpreterError(val error: String): RunResult {
+        override fun print() = System.err.println(error)
+    }
+    data class Success(val data: String): RunResult {
+        override fun print() = println(data)
+    }
 }
