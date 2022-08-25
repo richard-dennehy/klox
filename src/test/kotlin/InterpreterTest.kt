@@ -300,29 +300,27 @@ class InterpreterTest {
     }
 
     @Test
-    fun `cannot add string and non-string`() {
+    fun `adding string to non-string`() {
         arrayOf(
             "1",
             "false",
             "true",
             "nil"
         ).forEach {
-            mustFailExecution(
-                "\"string\" + $it", "Operand must be a string\n[line 1]"
-            )
+            mustEvaluateTo("\"stringified: \" + $it", "\"stringified: $it\"")
+            mustEvaluateTo("$it + \", stringified\"", "\"$it, stringified\"")
         }
     }
 
     @Test
     fun `cannot add numeric and non-numeric`() {
         arrayOf(
-            "\"1\"",
             "false",
             "true",
             "nil"
         ).forEach {
             mustFailExecution(
-                "2 + $it", "Operand must be a number\n[line 1]"
+                "2 + $it", "Operand must be a string or a number\n[line 1]"
             )
         }
     }
@@ -415,5 +413,10 @@ class InterpreterTest {
     @Test
     fun `empty input`() {
         mustFailParsing("", "[line 1] Error at end: Expected expression.")
+    }
+
+    @Test
+    fun `division by zero`() {
+        mustFailExecution("1 / (1 - 1)", "Division by zero\n[line 1]")
     }
 }

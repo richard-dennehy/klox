@@ -13,7 +13,7 @@ sealed interface TokenType {
     data class LoxString(override val asString: String) : Literal
 
     data class LoxNumber(val asDouble: Double) : Literal {
-        override val asString: String = asDouble.toString()
+        override val asString: String = asDouble.toString().removeSuffix(".0")
     }
 
     sealed interface BinaryOp : TokenType

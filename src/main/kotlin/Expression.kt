@@ -15,24 +15,6 @@ sealed interface Expression {
     data class Literal(val lit: TokenType.Literal, override val sourceLine: Int) : Expression
 }
 
-fun astDebugString(expr: Expression): String {
-    return when (expr) {
-        is Expression.Binary -> {
-            val op = expr.op.asString
-            val left = astDebugString(expr.left)
-            val right = astDebugString(expr.right)
-            "($op $left $right)"
-        }
-
-        is Expression.Grouping -> "(group ${astDebugString(expr.expression)})"
-        is Expression.Literal -> expr.lit.asString
-        is Expression.Unary -> {
-            val op = expr.op.asString
-            "($op ${astDebugString(expr.right)})"
-        }
-    }
-}
-
 class Interpreter {
     fun interpret(expr: Expression): InterpreterResult {
         return try {
@@ -44,7 +26,6 @@ class Interpreter {
 
     private fun stringify(value: Expression.Literal): String {
         return when (value.lit) {
-            is TokenType.LoxNumber -> value.lit.asDouble.toString().removeSuffix(".0")
             is TokenType.LoxString -> "\"${value.lit.asString}\""
             else -> value.lit.asString
         }
@@ -55,14 +36,10 @@ class Interpreter {
         fun expectDouble(value: Expression.Literal, context: TokenType, sourceLine: Int): Double {
             return when (value.lit) {
                 is TokenType.LoxNumber -> value.lit.asDouble
-                else -> throw InterpreterResult.Error(Token(context, context.asString, sourceLine), "Operand must be a number")
-            }
-        }
-
-        fun expectString(value: Expression.Literal, context: TokenType, sourceLine: Int): String {
-            return when (value.lit) {
-                is TokenType.LoxString -> value.lit.asString
-                else -> throw InterpreterResult.Error(Token(context, context.asString, sourceLine), "Operand must be a string")
+                else -> throw InterpreterResult.Error(
+                    Token(context, context.asString, sourceLine),
+                    "Operand must be a number"
+                )
             }
         }
 
@@ -91,9 +68,11 @@ class Interpreter {
                         val loxNumber = expectDouble(operand, expr.op, expr.sourceLine)
                         TokenType.LoxNumber(-loxNumber)
                     }
+
                     TokenType.Not -> loxBoolean(!isTruthy(operand))
                 }
             }
+
             is Expression.Binary -> {
                 val left = evaluate(expr.left)
                 val right = evaluate(expr.right)
@@ -110,7 +89,11 @@ class Interpreter {
                         val left = expectDouble(left, expr.op, expr.sourceLine)
                         val right = expectDouble(right, expr.op, expr.sourceLine)
 
-                        TokenType.LoxNumber(left / right)
+                        if (right != 0.0) {
+                            TokenType.LoxNumber(left / right)
+                        } else {
+                            throw InterpreterResult.Error(Token(expr.op, expr.op.asString, expr.sourceLine), "Division by zero")
+                        }
                     }
 
                     TokenType.Minus -> {
@@ -121,10 +104,19 @@ class Interpreter {
                     }
 
                     TokenType.Plus -> {
-                        when (left.lit) {
-                            is TokenType.LoxNumber -> TokenType.LoxNumber(left.lit.asDouble + expectDouble(right, expr.op, expr.sourceLine))
-                            is TokenType.LoxString -> TokenType.LoxString(left.lit.asString + expectString(right, expr.op, expr.sourceLine))
-                            else -> throw InterpreterResult.Error(
+                        if (left.lit is TokenType.LoxString || right.lit is TokenType.LoxString) {
+                            TokenType.LoxString(left.lit.asString + right.lit.asString)
+                        } else if (left.lit is TokenType.LoxNumber) {
+                            if (right.lit is TokenType.LoxNumber) {
+                                TokenType.LoxNumber(left.lit.asDouble + right.lit.asDouble)
+                            } else {
+                                throw InterpreterResult.Error(
+                                    Token(expr.op, expr.op.asString, expr.sourceLine),
+                                    "Operand must be a string or a number"
+                                )
+                            }
+                        } else {
+                            throw InterpreterResult.Error(
                                 Token(expr.op, expr.op.asString, expr.sourceLine),
                                 "Operand must be a string or a number"
                             )
