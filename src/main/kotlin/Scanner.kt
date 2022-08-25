@@ -141,6 +141,7 @@ class Scanner(private val source: String) {
 
     private tailrec fun blockComment(nesting: Int = 0) {
         if (nesting < 0) return
+        val startLine = line
 
         while (peek() != null) {
             when (advance()) {
@@ -154,6 +155,8 @@ class Scanner(private val source: String) {
                 }
             }
         }
+
+        parseErrors.recordError("Unterminated block comment.", startLine)
     }
 }
 

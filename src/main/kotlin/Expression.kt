@@ -91,7 +91,7 @@ class Interpreter {
                         val loxNumber = expectDouble(operand, expr.op, expr.sourceLine)
                         TokenType.LoxNumber(-loxNumber)
                     }
-                    TokenType.Not -> loxBoolean(isTruthy(operand))
+                    TokenType.Not -> loxBoolean(!isTruthy(operand))
                 }
             }
             is Expression.Binary -> {
@@ -159,9 +159,8 @@ class Interpreter {
                         loxBoolean(left <= right)
                     }
 
-                    // TODO this won't work for tokens on different lines
-                    TokenType.DoubleEquals -> loxBoolean(left == right)
-                    TokenType.NotEqual -> loxBoolean(left != right)
+                    TokenType.DoubleEquals -> loxBoolean(left.lit == right.lit)
+                    TokenType.NotEqual -> loxBoolean(left.lit != right.lit)
                 }
             }
         }

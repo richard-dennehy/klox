@@ -8,6 +8,7 @@ class Parser(private val tokens: List<Token>) {
         errors.underlying.clear()
 
         val expression = try {
+            // TODO this silently ignores anything it doesn't recognise
             expression()
         } catch (error: ParseError) {
             null
@@ -30,7 +31,7 @@ class Parser(private val tokens: List<Token>) {
             TokenType.GreaterThan,
             TokenType.GreaterThanOrEqual,
             TokenType.LessThanOrEqual,
-            TokenType.LessThanOrEqual
+            TokenType.LessThan
         )
 
     private fun term(): Expression = binary({ factor() }, TokenType.Minus, TokenType.Plus)
@@ -156,7 +157,7 @@ class ParseErrors(internal var underlying: MutableList<String>) {
         if (token.type == TokenType.EOF) {
             recordError(message, token.line, " at end")
         } else {
-            recordError(message, token.line, " at'${token.lexeme}'")
+            recordError(message, token.line, " at '${token.lexeme}'")
         }
     }
 

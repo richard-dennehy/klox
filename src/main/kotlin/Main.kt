@@ -41,21 +41,25 @@ fun runPrompt() {
 
 fun run(source: String): RunResult {
     val scanResult = Scanner(source).scanTokens()
-    val parseResult = Parser(scanResult.tokens).parse()
 
-    return if (scanResult.errors.isEmpty() && parseResult.errors.isEmpty()) {
-        if (parseResult.expression != null) {
-            when (val result = interpreter.interpret(parseResult.expression)) {
-                is InterpreterResult.Success -> RunResult.Success(result.data)
-                is InterpreterResult.Error -> {
-                    RunResult.InterpreterError("${result.message}\n[line ${result.token.line}]")
+    return if (scanResult.errors.isEmpty()) {
+        val parseResult = Parser(scanResult.tokens).parse()
+        if (parseResult.errors.isEmpty()) {
+            if (parseResult.expression != null) {
+                when (val result = interpreter.interpret(parseResult.expression)) {
+                    is InterpreterResult.Success -> RunResult.Success(result.data)
+                    is InterpreterResult.Error -> {
+                        RunResult.InterpreterError("${result.message}\n[line ${result.token.line}]")
+                    }
                 }
+            } else {
+                RunResult.Success("")
             }
         } else {
-            RunResult.Success("")
+            RunResult.ParseError(scanResult.errors + parseResult.errors)
         }
     } else {
-        RunResult.ParseError(scanResult.errors + parseResult.errors)
+        RunResult.ParseError(scanResult.errors)
     }
 }
 
