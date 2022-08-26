@@ -1,23 +1,79 @@
 import java.lang.RuntimeException
 
+// TODO it only makes sense to call this once per list, so the interface should be a function, not a class
 class Parser(private val tokens: List<Token>) {
     class ParseError : RuntimeException("Parse error")
-    private var errors = ParseErrors(mutableListOf())
+    private val errors = ParseErrors(mutableListOf())
+    private var current = 0
 
     fun parse(): ParseResult {
         errors.underlying.clear()
+        val statements = mutableListOf<Statement>()
 
-        val expression = try {
-            // TODO this silently ignores anything it doesn't recognise
-            expression()
+        while (moreTokens()) {
+            val declaration = declaration()
+            if (declaration != null) {
+                statements.add(declaration)
+            }
+        }
+
+        return ParseResult(statements, errors.asList())
+    }
+
+    private fun declaration(): Statement? {
+        return try {
+            val varToken = match(TokenType.Keyword.Var)
+            if (varToken != null) {
+                varDeclaration(varToken.second)
+            } else {
+                statement()
+            }
         } catch (error: ParseError) {
+            synchronise()
+            null
+        }
+    }
+
+    private fun varDeclaration(sourceLine: Int): Statement {
+        val next = peek()
+        val name = if (next?.type is TokenType.Identifier) {
+            advance()
+            next.type.asString
+        } else {
+            parseError("Expect variable name.")
+        }
+
+        val initialiser = if (match(TokenType.Equals) != null) {
+            expression()
+        } else {
             null
         }
 
-        return ParseResult(expression, errors.asList())
+        consume(TokenType.Semicolon, "Expect ';' after variable declaration")
+        return Statement.VarDeclaration(name, initialiser, sourceLine)
     }
 
-    private var current = 0
+    private fun statement(): Statement {
+        val printToken = match(TokenType.Keyword.Print)
+
+        return if (printToken != null) {
+            printStatement(printToken.second)
+        } else {
+            expressionStatement()
+        }
+    }
+
+    private fun printStatement(sourceLine: Int): Statement.Print {
+        val value = expression()
+        consume(TokenType.Semicolon, "Expect ';' after value.")
+        return Statement.Print(value, sourceLine)
+    }
+
+    private fun expressionStatement(): Statement.ExpressionStatement {
+        val expr = expression()
+        consume(TokenType.Semicolon, "Expect ';' after expression.")
+        return Statement.ExpressionStatement(expr, expr.sourceLine)
+    }
 
     private fun expression(): Expression {
         return equality()
@@ -80,6 +136,11 @@ class Parser(private val tokens: List<Token>) {
             return Expression.Grouping(grouped, next.line)
         }
 
+        if (next.type is TokenType.Identifier) {
+            advance()
+            return Expression.Variable(next.type.asString, next.line)
+        }
+
         parseError("Expected expression.")
     }
 
@@ -116,6 +177,8 @@ class Parser(private val tokens: List<Token>) {
 
     private fun peek(): Token? = tokens.getOrNull(current)
 
+    private fun moreTokens(): Boolean = peek() != null && peek()?.type != TokenType.EOF
+
     private fun parseError(errorMessage: String): Nothing {
         errors.recordError(peek() ?: tokens.last(), errorMessage)
         throw ParseError()
@@ -146,7 +209,7 @@ class Parser(private val tokens: List<Token>) {
     }
 }
 
-data class ParseResult(val expression: Expression?, val errors: List<String>)
+data class ParseResult(val statements: List<Statement>, val errors: List<String>)
 
 class ParseErrors(internal var underlying: MutableList<String>) {
     internal fun recordError(message: String, line: Int, where: String = "") {

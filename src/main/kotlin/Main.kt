@@ -45,15 +45,11 @@ fun run(source: String): RunResult {
     return if (scanResult.errors.isEmpty()) {
         val parseResult = Parser(scanResult.tokens).parse()
         if (parseResult.errors.isEmpty()) {
-            if (parseResult.expression != null) {
-                when (val result = interpreter.interpret(parseResult.expression)) {
-                    is InterpreterResult.Success -> RunResult.Success(result.data)
-                    is InterpreterResult.Error -> {
-                        RunResult.InterpreterError("${result.message}\n[line ${result.token.line}]")
-                    }
+            when (val result = interpreter.interpret(parseResult.statements)) {
+                is InterpreterResult.Success -> RunResult.Success(result.data ?: "")
+                is InterpreterResult.Error -> {
+                    RunResult.InterpreterError("${result.message}\n[line ${result.token.line}]")
                 }
-            } else {
-                RunResult.Success("")
             }
         } else {
             RunResult.ParseError(scanResult.errors + parseResult.errors)
@@ -66,13 +62,15 @@ fun run(source: String): RunResult {
 sealed interface RunResult {
     fun print()
 
-    data class ParseError(val errors: List<String>): RunResult {
+    data class ParseError(val errors: List<String>) : RunResult {
         override fun print() = errors.forEach(System.err::println)
     }
-    data class InterpreterError(val error: String): RunResult {
+
+    data class InterpreterError(val error: String) : RunResult {
         override fun print() = System.err.println(error)
     }
-    data class Success(val data: String): RunResult {
+
+    data class Success(val data: String) : RunResult {
         override fun print() = println(data)
     }
 }
