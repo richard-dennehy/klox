@@ -1,4 +1,6 @@
 class Interpreter {
+    private val environment = Environment(mutableMapOf())
+
     fun interpret(statements: List<Statement>): InterpreterResult {
         return try {
             InterpreterResult.Success(statements.map(this::execute).lastOrNull())
@@ -14,7 +16,16 @@ class Interpreter {
                 println(stringify(evaluate(statement.expression)))
                 ""
             }
-            is Statement.VarDeclaration -> TODO()
+            is Statement.VarDeclaration -> {
+                val value = if (statement.initialiser != null) {
+                    evaluate(statement.initialiser).lit
+                } else {
+                    TokenType.KeywordLiteral.Nil
+                }
+
+                environment[statement.name] = value
+                ""
+            }
         }
     }
 
@@ -66,7 +77,8 @@ class Interpreter {
                     TokenType.Not -> loxBoolean(!isTruthy(operand))
                 }
             }
-            is Expression.Variable -> TODO()
+            is Expression.Variable -> environment[expr.name]
+            is Expression.Assignment -> evaluate(expr.value).lit.also { environment.assign(expr.assignee, it) }
 
             is Expression.Binary -> {
                 val left = evaluate(expr.left)
@@ -156,6 +168,25 @@ class Interpreter {
         }
 
         return Expression.Literal(lit, expr.sourceLine)
+    }
+}
+
+// TODO introduce e.g. LoxValue rather than using Literal everywhere
+private class Environment(private val values: MutableMap<String, TokenType.Literal>) {
+    operator fun get(token: Token): TokenType.Literal {
+        return values[token.lexeme] ?: throw InterpreterResult.Error(token, "Undefined variable ${token.lexeme}.")
+    }
+
+    operator fun set(name: String, value: TokenType.Literal) {
+        values[name] = value
+    }
+
+    fun assign(name: Token, value: TokenType.Literal) {
+        if (values[name.lexeme] != null) {
+            values[name.lexeme] = value
+        } else {
+            throw InterpreterResult.Error(name, "Undefined variable ${name.lexeme}")
+        }
     }
 }
 

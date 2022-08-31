@@ -76,7 +76,24 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun expression(): Expression {
-        return equality()
+        return assignment()
+    }
+
+    private fun assignment(): Expression {
+        val expression = equality()
+
+        val equals = match(TokenType.Equals)
+        if (equals != null) {
+            val value = assignment()
+
+            if (expression is Expression.Variable) {
+                return Expression.Assignment(expression.name, value)
+            }
+
+            errors.recordError("Invalid assignment target.", equals.second, " at ${equals.first}")
+        }
+
+        return expression
     }
 
     private fun equality(): Expression = binary({ comparison() }, TokenType.DoubleEquals, TokenType.NotEqual)
@@ -138,7 +155,7 @@ class Parser(private val tokens: List<Token>) {
 
         if (next.type is TokenType.Identifier) {
             advance()
-            return Expression.Variable(next.type.asString, next.line)
+            return Expression.Variable(next)
         }
 
         parseError("Expected expression.")
