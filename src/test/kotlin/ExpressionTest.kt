@@ -1,38 +1,7 @@
+import util.InterpreterTest
 import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.fail
 
-class SingleExpressionTest {
-    private fun RunResult.stringified(): String {
-        return when (this) {
-            is RunResult.InterpreterError -> this.error
-            is RunResult.ParseError -> this.errors.joinToString("\n")
-            is RunResult.Success -> this.data
-        }
-    }
-
-    private fun mustEvaluateTo(source: String, result: String) {
-        assertEquals(result, run(source).stringified(), source)
-    }
-
-    private fun mustFailParsing(source: String, expectedError: String) {
-        when(val result = run(source)) {
-            is RunResult.ParseError ->
-                assertEquals(expectedError, result.stringified(), source)
-            else ->
-                fail("Expected parsing to fail, but it succeeded. Source:\n$source\nResult: $result")
-        }
-    }
-
-    private fun mustFailExecution(source: String, expectedError: String) {
-        when(val result = run(source)) {
-            is RunResult.InterpreterError ->
-                assertEquals(expectedError, result.stringified(), source)
-            else ->
-                fail("Expected interpreter to fail, but it succeeded. Source:\n$source\nResult: $result")
-        }
-    }
-
+class ExpressionTest: InterpreterTest() {
     @Test
     fun `empty input`() {
         mustEvaluateTo("", "")

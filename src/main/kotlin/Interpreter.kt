@@ -1,4 +1,4 @@
-class Interpreter {
+class Interpreter(private val io: IO) {
     private var scope = Environment()
 
     fun interpret(statements: List<Statement>): InterpreterResult {
@@ -13,7 +13,7 @@ class Interpreter {
         return when (statement) {
             is Statement.ExpressionStatement -> stringify(evaluate(statement.expression))
             is Statement.Print -> {
-                println(stringify(evaluate(statement.expression)))
+                io.print(stringify(evaluate(statement.expression)))
                 ""
             }
             is Statement.VarDeclaration -> {

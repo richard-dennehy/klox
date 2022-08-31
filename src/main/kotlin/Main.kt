@@ -15,10 +15,10 @@ fun main(args: Array<String>) {
     }
 }
 
-private val interpreter = Interpreter()
+private val runner = Runner(SystemIO())
 
-fun runFile(path: String) {
-    val result = run(Files.readString(Paths.get(path)))
+private fun runFile(path: String) {
+    val result = runner.run(Files.readString(Paths.get(path)))
     result.print()
 
     when (result) {
@@ -28,34 +28,38 @@ fun runFile(path: String) {
     }
 }
 
-fun runPrompt() {
+private fun runPrompt() {
     val reader = BufferedReader(InputStreamReader(System.`in`))
 
     while (true) {
         print("> ")
         val line = reader.readLine() ?: break
         // keep running after errors
-        run(line).print()
+        runner.run(line).print()
     }
 }
 
-fun run(source: String): RunResult {
-    val scanResult = Scanner(source).scanTokens()
+class Runner(io: IO) {
+    private val interpreter = Interpreter(io)
 
-    return if (scanResult.errors.isEmpty()) {
-        val parseResult = Parser(scanResult.tokens).parse()
-        if (parseResult.errors.isEmpty()) {
-            when (val result = interpreter.interpret(parseResult.statements)) {
-                is InterpreterResult.Success -> RunResult.Success(result.data ?: "")
-                is InterpreterResult.Error -> {
-                    RunResult.InterpreterError("${result.message}\n[line ${result.token.line}]")
+    fun run(source: String): RunResult {
+        val scanResult = Scanner(source).scanTokens()
+
+        return if (scanResult.errors.isEmpty()) {
+            val parseResult = Parser(scanResult.tokens).parse()
+            if (parseResult.errors.isEmpty()) {
+                when (val result = interpreter.interpret(parseResult.statements)) {
+                    is InterpreterResult.Success -> RunResult.Success(result.data ?: "")
+                    is InterpreterResult.Error -> {
+                        RunResult.InterpreterError("${result.message}\n[line ${result.token.line}]")
+                    }
                 }
+            } else {
+                RunResult.ParseError(scanResult.errors + parseResult.errors)
             }
         } else {
-            RunResult.ParseError(scanResult.errors + parseResult.errors)
+            RunResult.ParseError(scanResult.errors)
         }
-    } else {
-        RunResult.ParseError(scanResult.errors)
     }
 }
 
