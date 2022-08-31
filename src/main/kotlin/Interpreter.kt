@@ -1,5 +1,5 @@
 class Interpreter {
-    private val environment = Environment(mutableMapOf())
+    private var scope = Environment()
 
     fun interpret(statements: List<Statement>): InterpreterResult {
         return try {
@@ -23,8 +23,17 @@ class Interpreter {
                     TokenType.KeywordLiteral.Nil
                 }
 
-                environment[statement.name] = value
+                scope[statement.name] = value
                 ""
+            }
+            is Statement.Block -> {
+                val previous = scope
+                scope = Environment(scope)
+                try {
+                    statement.statements.map(this::execute).lastOrNull() ?: ""
+                } finally {
+                    scope = previous
+                }
             }
         }
     }
@@ -77,8 +86,8 @@ class Interpreter {
                     TokenType.Not -> loxBoolean(!isTruthy(operand))
                 }
             }
-            is Expression.Variable -> environment[expr.name]
-            is Expression.Assignment -> evaluate(expr.value).lit.also { environment.assign(expr.assignee, it) }
+            is Expression.Variable -> scope[expr.name]
+            is Expression.Assignment -> evaluate(expr.value).lit.also { scope.assign(expr.assignee, it) }
 
             is Expression.Binary -> {
                 val left = evaluate(expr.left)
@@ -172,9 +181,20 @@ class Interpreter {
 }
 
 // TODO introduce e.g. LoxValue rather than using Literal everywhere
-private class Environment(private val values: MutableMap<String, TokenType.Literal>) {
-    operator fun get(token: Token): TokenType.Literal {
-        return values[token.lexeme] ?: throw InterpreterResult.Error(token, "Undefined variable ${token.lexeme}.")
+private class Environment(private val parent: Environment? = null) {
+    private val values: MutableMap<String, TokenType.Literal> = mutableMapOf()
+
+    operator fun get(name: Token): TokenType.Literal {
+        val value = values[name.lexeme]
+        if (value != null) {
+            return value
+        }
+
+        if (parent != null) {
+            return parent[name]
+        }
+
+        throw undefined(name)
     }
 
     operator fun set(name: String, value: TokenType.Literal) {
@@ -184,9 +204,15 @@ private class Environment(private val values: MutableMap<String, TokenType.Liter
     fun assign(name: Token, value: TokenType.Literal) {
         if (values[name.lexeme] != null) {
             values[name.lexeme] = value
+        } else if (parent != null) {
+            parent.assign(name, value)
         } else {
-            throw InterpreterResult.Error(name, "Undefined variable ${name.lexeme}")
+            throw undefined(name)
         }
+    }
+
+    private fun undefined(token: Token): InterpreterResult.Error {
+        return InterpreterResult.Error(token, "Undefined variable ${token.lexeme}.")
     }
 }
 

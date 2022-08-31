@@ -54,12 +54,11 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun statement(): Statement {
-        val printToken = match(TokenType.Keyword.Print)
-
-        return if (printToken != null) {
-            printStatement(printToken.second)
-        } else {
-            expressionStatement()
+        val matched = match(TokenType.Keyword.Print, TokenType.LeftBrace)
+        return when (matched?.first) {
+            TokenType.Keyword.Print -> printStatement(matched.second)
+            TokenType.LeftBrace -> block(matched.second)
+            else -> expressionStatement()
         }
     }
 
@@ -67,6 +66,19 @@ class Parser(private val tokens: List<Token>) {
         val value = expression()
         consume(TokenType.Semicolon, "Expect ';' after value.")
         return Statement.Print(value, sourceLine)
+    }
+
+    private fun block(sourceLine: Int): Statement.Block {
+        val statements = mutableListOf<Statement>()
+
+        while (!check(TokenType.RightBrace) && moreTokens()) {
+            declaration().let {
+                if (it != null) statements.add(it)
+            }
+        }
+        consume(TokenType.RightBrace, "Expect '}' after block.")
+
+        return Statement.Block(statements.toList(), sourceLine)
     }
 
     private fun expressionStatement(): Statement.ExpressionStatement {

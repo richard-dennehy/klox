@@ -25,4 +25,5 @@ sealed interface Statement {
     data class ExpressionStatement(val expression: Expression, override val sourceLine: Int): Statement
     data class Print(val expression: Expression, override val sourceLine: Int): Statement
     data class VarDeclaration(val name: String, val initialiser: Expression?, override val sourceLine: Int): Statement
+    data class Block(val statements: List<Statement>, override val sourceLine: Int): Statement
 }

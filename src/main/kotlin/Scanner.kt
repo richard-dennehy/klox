@@ -22,8 +22,8 @@ class Scanner(private val source: String) {
         val token: TokenType = when (char) {
             '(' -> TokenType.LeftParenthesis
             ')' -> TokenType.RightParenthesis
-            '[' -> TokenType.LeftBrace
-            ']' -> TokenType.RightBrace
+            '{' -> TokenType.LeftBrace
+            '}' -> TokenType.RightBrace
             ',' -> TokenType.Comma
             '.' -> TokenType.Dot
             '-' -> TokenType.Minus
