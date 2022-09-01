@@ -16,16 +16,12 @@ class Interpreter(private val io: IO) {
                 io.print(stringify(evaluate(statement.expression)))
                 ""
             }
-            is Statement.VarDeclaration -> {
-                val value = if (statement.initialiser != null) {
-                    evaluate(statement.initialiser).lit
-                } else {
-                    TokenType.KeywordLiteral.Nil
-                }
 
-                scope[statement.name] = value
+            is Statement.VarDeclaration -> {
+                scope[statement.name] = statement.initialiser?.let { evaluate(it).lit }
                 ""
             }
+
             is Statement.Block -> {
                 val previous = scope
                 scope = Environment(scope)
@@ -86,6 +82,7 @@ class Interpreter(private val io: IO) {
                     TokenType.Not -> loxBoolean(!isTruthy(operand))
                 }
             }
+
             is Expression.Variable -> scope[expr.name]
             is Expression.Assignment -> evaluate(expr.value).lit.also { scope.assign(expr.assignee, it) }
 
@@ -182,28 +179,30 @@ class Interpreter(private val io: IO) {
 
 // TODO introduce e.g. LoxValue rather than using Literal everywhere
 private class Environment(private val parent: Environment? = null) {
-    private val values: MutableMap<String, TokenType.Literal> = mutableMapOf()
+    private val values: MutableMap<String, LoxVariable> = mutableMapOf()
 
-    operator fun get(name: Token): TokenType.Literal {
-        val value = values[name.lexeme]
-        if (value != null) {
-            return value
+    operator fun get(name: Token): TokenType.Literal =
+        when (val maybeInitialised = values[name.lexeme]) {
+            is LoxVariable.Initialised -> maybeInitialised.value
+            is LoxVariable.Uninitialised -> throw uninitialised(name)
+            null -> if (parent != null) {
+                parent[name]
+            } else {
+                throw undefined(name)
+            }
         }
 
-        if (parent != null) {
-            return parent[name]
+    operator fun set(name: String, value: TokenType.Literal?) {
+        values[name] = if (value != null) {
+            LoxVariable.Initialised(value)
+        } else {
+            LoxVariable.Uninitialised
         }
-
-        throw undefined(name)
-    }
-
-    operator fun set(name: String, value: TokenType.Literal) {
-        values[name] = value
     }
 
     fun assign(name: Token, value: TokenType.Literal) {
         if (values[name.lexeme] != null) {
-            values[name.lexeme] = value
+            values[name.lexeme] = LoxVariable.Initialised(value)
         } else if (parent != null) {
             parent.assign(name, value)
         } else {
@@ -212,8 +211,17 @@ private class Environment(private val parent: Environment? = null) {
     }
 
     private fun undefined(token: Token): InterpreterResult.Error {
-        return InterpreterResult.Error(token, "Undefined variable ${token.lexeme}.")
+        return InterpreterResult.Error(token, "Undefined variable `${token.lexeme}`.")
     }
+
+    private fun uninitialised(token: Token): InterpreterResult.Error {
+        return InterpreterResult.Error(token, "Uninitialised variable `${token.lexeme}`")
+    }
+}
+
+sealed interface LoxVariable {
+    object Uninitialised : LoxVariable
+    data class Initialised(val value: TokenType.Literal) : LoxVariable
 }
 
 sealed interface InterpreterResult {

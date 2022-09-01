@@ -39,7 +39,7 @@ abstract class InterpreterTest {
             is RunResult.ParseError ->
                 assertEquals(expectedError, result.stringified(), source)
             else ->
-                fail("Expected parsing to fail, but it succeeded. Source:\n$source\nResult: $result")
+                fail("Expected parsing to fail, but it succeeded.\nSource:\n$source\nResult:\n$result")
         }
     }
 
@@ -47,8 +47,10 @@ abstract class InterpreterTest {
         when(val result = runner.run(source)) {
             is RunResult.InterpreterError ->
                 assertEquals(expectedError, result.stringified(), source)
-            else ->
-                fail("Expected interpreter to fail, but it succeeded. Source:\n$source\nResult: $result")
+            is RunResult.ParseError ->
+                fail("Unexpectedly failed parsing.\nSource:\n$source\nResult:\n$result")
+            is RunResult.Success ->
+                fail("Expected interpreter to fail, but it succeeded.\nSource:\n$source\nResult:\n$result")
         }
     }
 

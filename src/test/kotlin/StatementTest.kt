@@ -3,11 +3,6 @@ import util.InterpreterTest
 
 class StatementTest: InterpreterTest() {
     @Test
-    fun `uninitialised variable declaration`() {
-        mustEvaluateTo("var a; a;", "nil")
-    }
-
-    @Test
     fun `variable declaration using literal value`() {
         mustEvaluateTo("var a = 1; a;", "1")
     }
@@ -15,6 +10,17 @@ class StatementTest: InterpreterTest() {
     @Test
     fun `variable declaration using expression result`() {
         mustEvaluateTo("var a = 2 + 3; a;", "5")
+    }
+
+    @Test
+    fun `redeclaring variable`() {
+        mustEvaluateTo("var a = 1; var a = 2; a;", "2")
+    }
+
+    @Test
+    fun `variables persist between run calls (for REPL)`() {
+        mustEvaluateTo("var a = 1; a;", "1")
+        mustEvaluateTo("a;", "1")
     }
 
     @Test
@@ -74,5 +80,36 @@ class StatementTest: InterpreterTest() {
     @Test
     fun `shadowing variables`() {
         mustEvaluateTo("var a = 5; { var a = 10; a + 1; }", "11")
+    }
+
+    @Test
+    fun `cannot assign to undeclared variable`() {
+        mustFailExecution("a = 1;", "Undefined variable `a`.\n[line 1]")
+    }
+
+    @Test
+    fun `cannot print nothing`() {
+        mustFailParsing("print;", "[line 1] Error at ';': Expected expression.")
+    }
+
+    @Test
+    fun `block declared variables are dropped at the block end`() {
+        mustFailExecution("{ var a = 1; } print a;", "Undefined variable `a`.\n[line 1]")
+    }
+
+    @Test
+    fun `cannot print uninitialised variable`() {
+        mustFailExecution("var uninitialised; print uninitialised;", "Uninitialised variable `uninitialised`\n[line 1]")
+    }
+
+    @Test
+    fun `cannot reference uninitialised variable`() {
+        mustFailExecution("var uninitialised; print 1 + uninitialised;", "Uninitialised variable `uninitialised`\n[line 1]")
+    }
+
+    @Test
+    fun `interpreter continues parsing after invalid statements`() {
+        mustFailParsing("var missingSemicolon = 1 print missingSemicolon; +notUnary", "[line 1] Error at 'print': Expect ';' after variable declaration\n" +
+                "[line 1] Error at '+': Expected expression.")
     }
 }
