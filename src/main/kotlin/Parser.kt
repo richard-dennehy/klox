@@ -3,6 +3,7 @@ import java.lang.RuntimeException
 // TODO it only makes sense to call this once per list, so the interface should be a function, not a class
 class Parser(private val tokens: List<Token>) {
     class ParseError : RuntimeException("Parse error")
+
     private val errors = ParseErrors(mutableListOf())
     private var current = 0
 
@@ -54,24 +55,21 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun statement(): Statement {
-        val matched = match(TokenType.Keyword.Print, TokenType.LeftBrace, TokenType.Keyword.If)
+        val matched = match(
+            TokenType.Keyword.For,
+            TokenType.Keyword.If,
+            TokenType.LeftBrace,
+            TokenType.Keyword.Print,
+            TokenType.Keyword.While,
+        )
         return when (matched?.first) {
             TokenType.Keyword.Print -> printStatement()
             TokenType.LeftBrace -> block()
             TokenType.Keyword.If -> ifStatement()
+            TokenType.Keyword.While -> whileStatement()
+            TokenType.Keyword.For -> forStatement(matched.second)
             else -> expressionStatement()
         }
-    }
-
-    private fun ifStatement(): Statement.If {
-        consume(TokenType.LeftParenthesis, "Expect '(' after 'if'.")
-        val condition = expression()
-        consume(TokenType.RightParenthesis, "Expect ')' after if condition.")
-
-        val thenBranch = statement()
-        val elseBranch = match(TokenType.Keyword.Else)?.let { statement() }
-
-        return Statement.If(condition, thenBranch, elseBranch)
     }
 
     private fun printStatement(): Statement.Print {
@@ -91,6 +89,63 @@ class Parser(private val tokens: List<Token>) {
         consume(TokenType.RightBrace, "Expect '}' after block.")
 
         return Statement.Block(statements.toList())
+    }
+
+    private fun ifStatement(): Statement.If {
+        consume(TokenType.LeftParenthesis, "Expect '(' after 'if'.")
+        val condition = expression()
+        consume(TokenType.RightParenthesis, "Expect ')' after if condition.")
+
+        val thenBranch = statement()
+        val elseBranch = match(TokenType.Keyword.Else)?.let { statement() }
+
+        return Statement.If(condition, thenBranch, elseBranch)
+    }
+
+    private fun whileStatement(): Statement.While {
+        consume(TokenType.LeftParenthesis, "Expect '(' after 'while'.")
+        val condition = expression()
+        consume(TokenType.RightParenthesis, "Expect ')' after while condition.")
+        val body = statement()
+
+        return Statement.While(condition, body)
+    }
+
+    private fun forStatement(sourceLine: Int): Statement {
+        consume(TokenType.LeftParenthesis, "Expect '(' after 'for'.")
+        val initialiser = when (match(TokenType.Semicolon, TokenType.Keyword.Var)?.first) {
+            TokenType.Semicolon -> null
+            TokenType.Keyword.Var -> varDeclaration()
+            else -> expressionStatement()
+        }
+
+        val condition = if (!check(TokenType.Semicolon)) {
+            expression()
+        } else {
+            null
+        }
+        consume(TokenType.Semicolon, "Expect ';' after loop condition.")
+
+        val increment = if (!check(TokenType.RightParenthesis)) {
+            expression()
+        } else {
+            null
+        }
+        consume(TokenType.RightParenthesis, "Expect ')' after for clauses.")
+
+        var body = statement()
+
+        if (increment != null) {
+            body = Statement.Block(listOf(body, Statement.ExpressionStatement(increment)))
+        }
+
+        body = Statement.While(condition ?: Expression.Literal(TokenType.KeywordLiteral.True, sourceLine), body)
+
+        if (initialiser != null) {
+            body = Statement.Block(listOf(initialiser, body))
+        }
+
+        return body
     }
 
     private fun expressionStatement(): Statement.ExpressionStatement {

@@ -35,6 +35,11 @@ class ControlFlowTest: InterpreterTest() {
     }
 
     @Test
+    fun `if prints last statement in branch in REPL`() {
+        mustEvaluateTo("if (true) 1; else -1;", "1")
+    }
+
+    @Test
     fun `or returns left operand if truthy`() {
         mustEvaluateTo("\"hi\" or 2;", "\"hi\"")
     }
@@ -66,5 +71,25 @@ class ControlFlowTest: InterpreterTest() {
         TODO()
     }
 
+    @Test
+    fun `while statement`() {
+        mustEvaluateTo("var i = 5; while (i > 0) print i = i - 1;", "")
+        mustHavePrinted("4", "3", "2", "1", "0")
+    }
 
+    @Test
+    fun `while prints result of last statement in REPL`() {
+        mustEvaluateTo("var i = 5; while (i > 0) i = i - 1;", "0")
+    }
+
+    @Test
+    fun `while statement must have body`() {
+        mustFailParsing("while (false)", "[line 1] Error at end: Expected expression.")
+    }
+
+    @Test
+    fun `for statement`() {
+        mustEvaluateTo("for (var i = 5; i > 0; i = i - 1) print i;", "0")
+        mustHavePrinted("5", "4", "3", "2", "1")
+    }
 }

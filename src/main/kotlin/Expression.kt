@@ -27,4 +27,5 @@ sealed interface Statement {
     data class VarDeclaration(val name: String, val initialiser: Expression?): Statement
     data class Block(val statements: List<Statement>): Statement
     data class If(val condition: Expression, val thenBranch: Statement, val elseBranch: Statement?): Statement
+    data class While(val condition: Expression, val body: Statement): Statement
 }

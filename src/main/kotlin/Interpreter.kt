@@ -37,6 +37,14 @@ class Interpreter(private val io: IO) {
             } else {
                 statement.elseBranch?.let(::execute) ?: ""
             }
+
+            is Statement.While -> {
+                var result = ""
+                while (isTruthy(evaluate(statement.condition))) {
+                    result = execute(statement.body)
+                }
+                result
+            }
         }
     }
 
