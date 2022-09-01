@@ -1,7 +1,7 @@
 import org.junit.jupiter.api.Test
 import util.InterpreterTest
 
-class StatementTest: InterpreterTest() {
+class StatementsTest: InterpreterTest() {
     @Test
     fun `variable declaration using literal value`() {
         mustEvaluateTo("var a = 1; a;", "1")

@@ -55,6 +55,10 @@ abstract class InterpreterTest {
     }
 
     fun mustHavePrinted(vararg messages: String) {
-        assertEquals(testIO.printed.toList(), messages.toList())
+        assertEquals(messages.toList(), testIO.printed.toList())
+    }
+
+    fun mustHaveNotPrinted() {
+        assertEquals(listOf(), testIO.printed.toList())
     }
 }

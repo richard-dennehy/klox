@@ -3,7 +3,7 @@ class Interpreter(private val io: IO) {
 
     fun interpret(statements: List<Statement>): InterpreterResult {
         return try {
-            InterpreterResult.Success(statements.map(this::execute).lastOrNull())
+            InterpreterResult.Success(statements.map(::execute).lastOrNull())
         } catch (error: InterpreterResult.Error) {
             error
         }
@@ -26,10 +26,16 @@ class Interpreter(private val io: IO) {
                 val previous = scope
                 scope = Environment(scope)
                 try {
-                    statement.statements.map(this::execute).lastOrNull() ?: ""
+                    statement.statements.map(::execute).lastOrNull() ?: ""
                 } finally {
                     scope = previous
                 }
+            }
+
+            is Statement.If -> if (isTruthy(evaluate(statement.condition))) {
+                execute(statement.thenBranch)
+            } else {
+                statement.elseBranch?.let(::execute) ?: ""
             }
         }
     }
@@ -50,13 +56,6 @@ class Interpreter(private val io: IO) {
                     Token(context, context.asString, sourceLine),
                     "Operand must be a number"
                 )
-            }
-        }
-
-        fun isTruthy(value: Expression.Literal): Boolean {
-            return when (value.lit) {
-                TokenType.KeywordLiteral.Nil, TokenType.KeywordLiteral.False -> false
-                else -> true
             }
         }
 
@@ -85,6 +84,22 @@ class Interpreter(private val io: IO) {
 
             is Expression.Variable -> scope[expr.name]
             is Expression.Assignment -> evaluate(expr.value).lit.also { scope.assign(expr.assignee, it) }
+            is Expression.Or -> {
+                val left = evaluate(expr.left)
+                if (isTruthy(left)) {
+                    left.lit
+                } else {
+                    evaluate(expr.right).lit
+                }
+            }
+            is Expression.And -> {
+                val left = evaluate(expr.left)
+                if (!isTruthy(left)) {
+                    left.lit
+                } else {
+                    evaluate(expr.right).lit
+                }
+            }
 
             is Expression.Binary -> {
                 val left = evaluate(expr.left)
@@ -174,6 +189,13 @@ class Interpreter(private val io: IO) {
         }
 
         return Expression.Literal(lit, expr.sourceLine)
+    }
+
+    private fun isTruthy(value: Expression.Literal): Boolean {
+        return when (value.lit) {
+            TokenType.KeywordLiteral.Nil, TokenType.KeywordLiteral.False -> false
+            else -> true
+        }
     }
 }
 

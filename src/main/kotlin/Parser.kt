@@ -24,7 +24,7 @@ class Parser(private val tokens: List<Token>) {
         return try {
             val varToken = match(TokenType.Keyword.Var)
             if (varToken != null) {
-                varDeclaration(varToken.second)
+                varDeclaration()
             } else {
                 statement()
             }
@@ -34,7 +34,7 @@ class Parser(private val tokens: List<Token>) {
         }
     }
 
-    private fun varDeclaration(sourceLine: Int): Statement {
+    private fun varDeclaration(): Statement {
         val next = peek()
         val name = if (next?.type is TokenType.Identifier) {
             advance()
@@ -50,25 +50,37 @@ class Parser(private val tokens: List<Token>) {
         }
 
         consume(TokenType.Semicolon, "Expect ';' after variable declaration")
-        return Statement.VarDeclaration(name, initialiser, sourceLine)
+        return Statement.VarDeclaration(name, initialiser)
     }
 
     private fun statement(): Statement {
-        val matched = match(TokenType.Keyword.Print, TokenType.LeftBrace)
+        val matched = match(TokenType.Keyword.Print, TokenType.LeftBrace, TokenType.Keyword.If)
         return when (matched?.first) {
-            TokenType.Keyword.Print -> printStatement(matched.second)
-            TokenType.LeftBrace -> block(matched.second)
+            TokenType.Keyword.Print -> printStatement()
+            TokenType.LeftBrace -> block()
+            TokenType.Keyword.If -> ifStatement()
             else -> expressionStatement()
         }
     }
 
-    private fun printStatement(sourceLine: Int): Statement.Print {
-        val value = expression()
-        consume(TokenType.Semicolon, "Expect ';' after value.")
-        return Statement.Print(value, sourceLine)
+    private fun ifStatement(): Statement.If {
+        consume(TokenType.LeftParenthesis, "Expect '(' after 'if'.")
+        val condition = expression()
+        consume(TokenType.RightParenthesis, "Expect ')' after if condition.")
+
+        val thenBranch = statement()
+        val elseBranch = match(TokenType.Keyword.Else)?.let { statement() }
+
+        return Statement.If(condition, thenBranch, elseBranch)
     }
 
-    private fun block(sourceLine: Int): Statement.Block {
+    private fun printStatement(): Statement.Print {
+        val value = expression()
+        consume(TokenType.Semicolon, "Expect ';' after value.")
+        return Statement.Print(value)
+    }
+
+    private fun block(): Statement.Block {
         val statements = mutableListOf<Statement>()
 
         while (!check(TokenType.RightBrace) && moreTokens()) {
@@ -78,13 +90,13 @@ class Parser(private val tokens: List<Token>) {
         }
         consume(TokenType.RightBrace, "Expect '}' after block.")
 
-        return Statement.Block(statements.toList(), sourceLine)
+        return Statement.Block(statements.toList())
     }
 
     private fun expressionStatement(): Statement.ExpressionStatement {
         val expr = expression()
         consume(TokenType.Semicolon, "Expect ';' after expression.")
-        return Statement.ExpressionStatement(expr, expr.sourceLine)
+        return Statement.ExpressionStatement(expr)
     }
 
     private fun expression(): Expression {
@@ -92,7 +104,7 @@ class Parser(private val tokens: List<Token>) {
     }
 
     private fun assignment(): Expression {
-        val expression = equality()
+        val expression = or()
 
         val equals = match(TokenType.Equals)
         if (equals != null) {
@@ -106,6 +118,30 @@ class Parser(private val tokens: List<Token>) {
         }
 
         return expression
+    }
+
+    private fun or(): Expression {
+        var expr = and()
+
+        while (check(TokenType.Keyword.Or)) {
+            val or = advance()!!
+            val right = and()
+            expr = Expression.Or(expr, right, or.line)
+        }
+
+        return expr
+    }
+
+    private fun and(): Expression {
+        var expr = equality()
+
+        while (check(TokenType.Keyword.And)) {
+            val or = advance()!!
+            val right = equality()
+            expr = Expression.And(expr, right, or.line)
+        }
+
+        return expr
     }
 
     private fun equality(): Expression = binary({ comparison() }, TokenType.DoubleEquals, TokenType.NotEqual)
@@ -173,6 +209,7 @@ class Parser(private val tokens: List<Token>) {
         parseError("Expected expression.")
     }
 
+    // TODO could probably make the callers that want the line number use check & advance instead to simplify this (or return the actual matched token?)
     private fun <T : TokenType> match(vararg tokens: T): Pair<T, Int>? {
         for (token in tokens) {
             if (check(token)) {

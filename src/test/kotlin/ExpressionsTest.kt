@@ -1,7 +1,7 @@
 import util.InterpreterTest
 import kotlin.test.Test
 
-class ExpressionTest: InterpreterTest() {
+class ExpressionsTest: InterpreterTest() {
     @Test
     fun `empty input`() {
         mustEvaluateTo("", "")

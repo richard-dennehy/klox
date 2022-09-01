@@ -17,13 +17,14 @@ sealed interface Expression {
     data class Assignment(val assignee: Token, val value: Expression): Expression {
         override val sourceLine: Int = assignee.line
     }
+    data class And(val left: Expression, val right: Expression, override val sourceLine: Int): Expression
+    data class Or(val left: Expression, val right: Expression, override val sourceLine: Int): Expression
 }
 
 sealed interface Statement {
-    val sourceLine: Int
-
-    data class ExpressionStatement(val expression: Expression, override val sourceLine: Int): Statement
-    data class Print(val expression: Expression, override val sourceLine: Int): Statement
-    data class VarDeclaration(val name: String, val initialiser: Expression?, override val sourceLine: Int): Statement
-    data class Block(val statements: List<Statement>, override val sourceLine: Int): Statement
+    data class ExpressionStatement(val expression: Expression): Statement
+    data class Print(val expression: Expression): Statement
+    data class VarDeclaration(val name: String, val initialiser: Expression?): Statement
+    data class Block(val statements: List<Statement>): Statement
+    data class If(val condition: Expression, val thenBranch: Statement, val elseBranch: Statement?): Statement
 }
