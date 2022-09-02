@@ -13,14 +13,14 @@ class Interpreter(private val io: IO) {
 
     private fun execute(statement: Statement): String {
         return when (statement) {
-            is Statement.ExpressionStatement -> stringify(evaluate(statement.expression))
+            is Statement.ExpressionStatement -> stringify(evaluate(statement.expression, statement.sourceLine))
             is Statement.Print -> {
-                io.print(stringify(evaluate(statement.expression)))
+                io.print(stringify(evaluate(statement.expression, statement.sourceLine)))
                 ""
             }
 
             is Statement.VarDeclaration -> {
-                scope[statement.name] = statement.initialiser?.let { evaluate(it).lit }
+                scope[statement.name] = statement.initialiser?.let { evaluate(it, statement.sourceLine).lit }
                 ""
             }
 
@@ -34,7 +34,7 @@ class Interpreter(private val io: IO) {
                 }
             }
 
-            is Statement.If -> if (isTruthy(evaluate(statement.condition))) {
+            is Statement.If -> if (isTruthy(evaluate(statement.condition, statement.sourceLine))) {
                 execute(statement.thenBranch)
             } else {
                 statement.elseBranch?.let(::execute) ?: ""
@@ -43,7 +43,7 @@ class Interpreter(private val io: IO) {
             is Statement.While -> {
                 var result = ""
                 try {
-                    while (isTruthy(evaluate(statement.condition))) {
+                    while (isTruthy(evaluate(statement.condition, statement.sourceLine))) {
                         result = execute(statement.body)
                     }
                 } catch (_: Break) {}
@@ -61,7 +61,7 @@ class Interpreter(private val io: IO) {
     }
 
     @Suppress("NAME_SHADOWING")
-    private fun evaluate(expr: Expression): Expression.Literal {
+    private fun evaluate(expr: Expression, sourceLine: Int): Expression.Literal {
         fun expectDouble(value: Expression.Literal, sourceLine: Int): Double {
             return when (value.lit) {
                 is TokenType.LoxNumber -> value.lit.asDouble
@@ -82,12 +82,12 @@ class Interpreter(private val io: IO) {
 
         val lit = when (expr) {
             is Expression.Literal -> expr.lit
-            is Expression.Grouping -> evaluate(expr.expression).lit
+            is Expression.Grouping -> evaluate(expr.expression, sourceLine).lit
             is Expression.Unary -> {
-                val operand = evaluate(expr.right)
+                val operand = evaluate(expr.right, sourceLine)
                 when (expr.op) {
                     TokenType.Minus -> {
-                        val loxNumber = expectDouble(operand, expr.sourceLine)
+                        val loxNumber = expectDouble(operand, sourceLine)
                         TokenType.LoxNumber(-loxNumber)
                     }
 
@@ -96,53 +96,53 @@ class Interpreter(private val io: IO) {
             }
 
             is Expression.Variable -> scope[expr.name]
-            is Expression.Assignment -> evaluate(expr.value).lit.also { scope.assign(expr.assignee, it) }
+            is Expression.Assignment -> evaluate(expr.value, sourceLine).lit.also { scope.assign(expr.assignee, it) }
             is Expression.Or -> {
-                val left = evaluate(expr.left)
+                val left = evaluate(expr.left, sourceLine)
                 if (isTruthy(left)) {
                     left.lit
                 } else {
-                    evaluate(expr.right).lit
+                    evaluate(expr.right, sourceLine).lit
                 }
             }
             is Expression.And -> {
-                val left = evaluate(expr.left)
+                val left = evaluate(expr.left, sourceLine)
                 if (!isTruthy(left)) {
                     left.lit
                 } else {
-                    evaluate(expr.right).lit
+                    evaluate(expr.right, sourceLine).lit
                 }
             }
 
             is Expression.Binary -> {
-                val left = evaluate(expr.left)
-                val right = evaluate(expr.right)
+                val left = evaluate(expr.left, sourceLine)
+                val right = evaluate(expr.right, sourceLine)
 
                 when (expr.op) {
                     TokenType.Asterisk -> {
-                        val left = expectDouble(left, expr.sourceLine)
-                        val right = expectDouble(right, expr.sourceLine)
+                        val left = expectDouble(left, sourceLine)
+                        val right = expectDouble(right, sourceLine)
 
                         TokenType.LoxNumber(left * right)
                     }
 
                     TokenType.Slash -> {
-                        val left = expectDouble(left, expr.sourceLine)
-                        val right = expectDouble(right, expr.sourceLine)
+                        val left = expectDouble(left, sourceLine)
+                        val right = expectDouble(right, sourceLine)
 
                         if (right != 0.0) {
                             TokenType.LoxNumber(left / right)
                         } else {
                             throw InterpreterResult.Error(
-                                expr.sourceLine,
+                                sourceLine,
                                 "Division by zero"
                             )
                         }
                     }
 
                     TokenType.Minus -> {
-                        val left = expectDouble(left, expr.sourceLine)
-                        val right = expectDouble(right, expr.sourceLine)
+                        val left = expectDouble(left, sourceLine)
+                        val right = expectDouble(right, sourceLine)
 
                         TokenType.LoxNumber(left - right)
                     }
@@ -155,42 +155,42 @@ class Interpreter(private val io: IO) {
                                 TokenType.LoxNumber(left.lit.asDouble + right.lit.asDouble)
                             } else {
                                 throw InterpreterResult.Error(
-                                    expr.sourceLine,
+                                    sourceLine,
                                     "Operand must be a string or a number"
                                 )
                             }
                         } else {
                             throw InterpreterResult.Error(
-                                expr.sourceLine,
+                                sourceLine,
                                 "Operand must be a string or a number"
                             )
                         }
                     }
 
                     TokenType.GreaterThan -> {
-                        val left = expectDouble(left, expr.sourceLine)
-                        val right = expectDouble(right, expr.sourceLine)
+                        val left = expectDouble(left, sourceLine)
+                        val right = expectDouble(right, sourceLine)
 
                         loxBoolean(left > right)
                     }
 
                     TokenType.GreaterThanOrEqual -> {
-                        val left = expectDouble(left, expr.sourceLine)
-                        val right = expectDouble(right, expr.sourceLine)
+                        val left = expectDouble(left, sourceLine)
+                        val right = expectDouble(right, sourceLine)
 
                         loxBoolean(left >= right)
                     }
 
                     TokenType.LessThan -> {
-                        val left = expectDouble(left, expr.sourceLine)
-                        val right = expectDouble(right, expr.sourceLine)
+                        val left = expectDouble(left, sourceLine)
+                        val right = expectDouble(right, sourceLine)
 
                         loxBoolean(left < right)
                     }
 
                     TokenType.LessThanOrEqual -> {
-                        val left = expectDouble(left, expr.sourceLine)
-                        val right = expectDouble(right, expr.sourceLine)
+                        val left = expectDouble(left, sourceLine)
+                        val right = expectDouble(right, sourceLine)
 
                         loxBoolean(left <= right)
                     }
@@ -201,7 +201,7 @@ class Interpreter(private val io: IO) {
             }
         }
 
-        return Expression.Literal(lit, expr.sourceLine)
+        return Expression.Literal(lit)
     }
 
     private fun isTruthy(value: Expression.Literal): Boolean {

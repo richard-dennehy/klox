@@ -23,7 +23,7 @@ class Parser(private val tokens: List<Token>) {
         return try {
             val varToken = match(TokenType.Keyword.Var)
             if (varToken != null) {
-                varDeclaration()
+                varDeclaration(varToken.line)
             } else {
                 statement(breakable)
             }
@@ -33,7 +33,7 @@ class Parser(private val tokens: List<Token>) {
         }
     }
 
-    private fun varDeclaration(): Statement {
+    private fun varDeclaration(sourceLine: Int): Statement {
         val next = peek()
         val name = if (next?.type is TokenType.Identifier) {
             advance()
@@ -49,7 +49,7 @@ class Parser(private val tokens: List<Token>) {
         }
 
         consume(TokenType.Semicolon, "Expect ';' after variable declaration")
-        return Statement.VarDeclaration(name, initialiser)
+        return Statement.VarDeclaration(name, initialiser, sourceLine)
     }
 
     private fun statement(breakable: Boolean): Statement {
@@ -61,15 +61,15 @@ class Parser(private val tokens: List<Token>) {
             TokenType.Keyword.Print,
             TokenType.Keyword.While,
         )
-        return when (matched?.first) {
-            TokenType.Keyword.Print -> printStatement()
-            TokenType.LeftBrace -> block(breakable)
-            TokenType.Keyword.If -> ifStatement(breakable)
-            TokenType.Keyword.While -> whileStatement()
-            TokenType.Keyword.For -> forStatement(matched.second)
+        return when (matched?.type) {
+            TokenType.Keyword.Print -> printStatement(matched.line)
+            TokenType.LeftBrace -> block(matched.line, breakable)
+            TokenType.Keyword.If -> ifStatement(matched.line, breakable)
+            TokenType.Keyword.While -> whileStatement(matched.line)
+            TokenType.Keyword.For -> forStatement(matched.line)
             TokenType.Keyword.Break -> if (breakable) {
                 consume(TokenType.Semicolon, "Expect ';' after 'break'.")
-                Statement.Break
+                Statement.Break(matched.line)
             } else {
                 parseError("'break' not inside a loop.")
             }
@@ -77,13 +77,13 @@ class Parser(private val tokens: List<Token>) {
         }
     }
 
-    private fun printStatement(): Statement.Print {
+    private fun printStatement(sourceLine: Int): Statement.Print {
         val value = expression()
         consume(TokenType.Semicolon, "Expect ';' after value.")
-        return Statement.Print(value)
+        return Statement.Print(value, sourceLine)
     }
 
-    private fun block(breakable: Boolean): Statement.Block {
+    private fun block(sourceLine: Int, breakable: Boolean): Statement.Block {
         val statements = mutableListOf<Statement>()
 
         while (!check(TokenType.RightBrace) && moreTokens()) {
@@ -93,10 +93,10 @@ class Parser(private val tokens: List<Token>) {
         }
         consume(TokenType.RightBrace, "Expect '}' after block.")
 
-        return Statement.Block(statements.toList())
+        return Statement.Block(statements.toList(), sourceLine)
     }
 
-    private fun ifStatement(breakable: Boolean): Statement.If {
+    private fun ifStatement(sourceLine: Int, breakable: Boolean): Statement.If {
         consume(TokenType.LeftParenthesis, "Expect '(' after 'if'.")
         val condition = expression()
         consume(TokenType.RightParenthesis, "Expect ')' after if condition.")
@@ -104,23 +104,24 @@ class Parser(private val tokens: List<Token>) {
         val thenBranch = statement(breakable)
         val elseBranch = match(TokenType.Keyword.Else)?.let { statement(breakable) }
 
-        return Statement.If(condition, thenBranch, elseBranch)
+        return Statement.If(condition, thenBranch, elseBranch, sourceLine)
     }
 
-    private fun whileStatement(): Statement.While {
+    private fun whileStatement(sourceLine: Int): Statement.While {
         consume(TokenType.LeftParenthesis, "Expect '(' after 'while'.")
         val condition = expression()
         consume(TokenType.RightParenthesis, "Expect ')' after while condition.")
         val body = statement(breakable = true)
 
-        return Statement.While(condition, body)
+        return Statement.While(condition, body, sourceLine)
     }
 
     private fun forStatement(sourceLine: Int): Statement {
         consume(TokenType.LeftParenthesis, "Expect '(' after 'for'.")
-        val initialiser = when (match(TokenType.Semicolon, TokenType.Keyword.Var)?.first) {
+        val matched = match(TokenType.Semicolon, TokenType.Keyword.Var)
+        val initialiser = when (matched?.type) {
             TokenType.Semicolon -> null
-            TokenType.Keyword.Var -> varDeclaration()
+            TokenType.Keyword.Var -> varDeclaration(matched.line)
             else -> expressionStatement()
         }
 
@@ -141,22 +142,23 @@ class Parser(private val tokens: List<Token>) {
         var body = statement(breakable = true)
 
         if (increment != null) {
-            body = Statement.Block(listOf(body, Statement.ExpressionStatement(increment)))
+            body = Statement.Block(listOf(body, Statement.ExpressionStatement(increment, sourceLine)), sourceLine)
         }
 
-        body = Statement.While(condition ?: Expression.Literal(TokenType.KeywordLiteral.True, sourceLine), body)
+        body = Statement.While(condition ?: Expression.Literal(TokenType.KeywordLiteral.True), body, sourceLine)
 
         if (initialiser != null) {
-            body = Statement.Block(listOf(initialiser, body))
+            body = Statement.Block(listOf(initialiser, body), sourceLine)
         }
 
         return body
     }
 
     private fun expressionStatement(): Statement.ExpressionStatement {
+        val sourceLine = peek()?.line ?: parseError("Expected expression.")
         val expr = expression()
         consume(TokenType.Semicolon, "Expect ';' after expression.")
-        return Statement.ExpressionStatement(expr)
+        return Statement.ExpressionStatement(expr, sourceLine)
     }
 
     private fun expression(): Expression {
@@ -174,7 +176,7 @@ class Parser(private val tokens: List<Token>) {
                 return Expression.Assignment(expression.name, value)
             }
 
-            errors.recordError("Invalid assignment target.", equals.second, " at ${equals.first}")
+            errors.recordError("Invalid assignment target.", equals.line, " at ${equals.type.asString}")
         }
 
         return expression
@@ -184,9 +186,9 @@ class Parser(private val tokens: List<Token>) {
         var expr = and()
 
         while (check(TokenType.Keyword.Or)) {
-            val or = advance()!!
+            advance()!!
             val right = and()
-            expr = Expression.Or(expr, right, or.line)
+            expr = Expression.Or(expr, right)
         }
 
         return expr
@@ -196,9 +198,9 @@ class Parser(private val tokens: List<Token>) {
         var expr = equality()
 
         while (check(TokenType.Keyword.And)) {
-            val or = advance()!!
+            advance()!!
             val right = equality()
-            expr = Expression.And(expr, right, or.line)
+            expr = Expression.And(expr, right)
         }
 
         return expr
@@ -221,7 +223,7 @@ class Parser(private val tokens: List<Token>) {
 
     private fun unary(): Expression {
         val token = match(TokenType.Not, TokenType.Minus) ?: return primary()
-        return Expression.Unary(token.first, unary(), token.second)
+        return Expression.Unary(token.type as TokenType.UnaryOp, unary())
     }
 
     private fun binary(operand: () -> Expression, vararg operators: TokenType.BinaryOp): Expression {
@@ -230,7 +232,7 @@ class Parser(private val tokens: List<Token>) {
         var operator = nextMatch()
 
         while (operator != null) {
-            expr = Expression.Binary(expr, operator.first, operand(), operator.second)
+            expr = Expression.Binary(expr, operator.type as TokenType.BinaryOp, operand())
             operator = nextMatch()
         }
 
@@ -240,25 +242,25 @@ class Parser(private val tokens: List<Token>) {
     private fun primary(): Expression {
         val literal = match(TokenType.KeywordLiteral.True, TokenType.KeywordLiteral.False, TokenType.KeywordLiteral.Nil)
         if (literal != null) {
-            return Expression.Literal(literal.first, literal.second)
+            return Expression.Literal(literal.type as TokenType.Literal)
         }
 
         val next = peek() ?: parseError("Unexpected EOF in expression.")
         if (next.type is TokenType.LoxString) {
             advance()
-            return Expression.Literal(next.type, next.line)
+            return Expression.Literal(next.type)
         }
 
         if (next.type is TokenType.LoxNumber) {
             advance()
-            return Expression.Literal(next.type, next.line)
+            return Expression.Literal(next.type)
         }
 
         if (next.type == TokenType.LeftParenthesis) {
             advance()
             val grouped = expression()
             consume(TokenType.RightParenthesis, "Expected ')' after grouped expression.")
-            return Expression.Grouping(grouped, next.line)
+            return Expression.Grouping(grouped)
         }
 
         if (next.type is TokenType.Identifier) {
@@ -269,12 +271,10 @@ class Parser(private val tokens: List<Token>) {
         parseError("Expected expression.")
     }
 
-    // TODO could probably make the callers that want the line number use check & advance instead to simplify this (or return the actual matched token?)
-    private fun <T : TokenType> match(vararg tokens: T): Pair<T, Int>? {
+    private fun <T : TokenType> match(vararg tokens: T): Token? {
         for (token in tokens) {
             if (check(token)) {
-                val matched = advance()!!
-                return token to matched.line
+                return advance()!!
             }
         }
 
