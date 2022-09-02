@@ -1,5 +1,8 @@
-// TODO this interface would make more sense as a function (maybe backed by a private class) since it can only be run once
-class Scanner(private val source: String) {
+fun scanTokens(source: String): ScanResult = Scanner(source).scanTokens()
+
+data class ScanResult(val tokens: List<Token>, val errors: List<String>)
+
+private class Scanner(private val source: String) {
     private val tokens: MutableList<Token> = mutableListOf()
     private var start = 0
     private var current = 0
@@ -159,5 +162,3 @@ class Scanner(private val source: String) {
         parseErrors.recordError("Unterminated block comment.", startLine)
     }
 }
-
-data class ScanResult(val tokens: List<Token>, val errors: List<String>)

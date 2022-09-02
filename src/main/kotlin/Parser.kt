@@ -1,7 +1,10 @@
 import java.lang.RuntimeException
 
-// TODO it only makes sense to call this once per list, so the interface should be a function, not a class
-class Parser(private val tokens: List<Token>) {
+fun parse(tokens: List<Token>): ParseResult = Parser(tokens).parse()
+
+data class ParseResult(val statements: List<Statement>, val errors: List<String>)
+
+private class Parser(private val tokens: List<Token>) {
     private val errors = ParseErrors(mutableListOf())
     private var current = 0
 
@@ -335,9 +338,7 @@ class Parser(private val tokens: List<Token>) {
     }
 }
 
-data class ParseResult(val statements: List<Statement>, val errors: List<String>)
-
-class ParseErrors(internal var underlying: MutableList<String>) {
+internal class ParseErrors(internal var underlying: MutableList<String>) {
     internal fun recordError(message: String, line: Int, where: String = "") {
         underlying.add("[line $line] Error$where: $message")
     }

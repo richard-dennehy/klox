@@ -43,10 +43,10 @@ class Runner(io: IO) {
     private val interpreter = Interpreter(io)
 
     fun run(source: String): RunResult {
-        val scanResult = Scanner(source).scanTokens()
+        val scanResult = scanTokens(source)
 
         return if (scanResult.errors.isEmpty()) {
-            val parseResult = Parser(scanResult.tokens).parse()
+            val parseResult = parse(scanResult.tokens)
             if (parseResult.errors.isEmpty()) {
                 when (val result = interpreter.interpret(parseResult.statements)) {
                     is InterpreterResult.Success -> RunResult.Success(result.data ?: "")
