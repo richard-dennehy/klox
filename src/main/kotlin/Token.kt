@@ -7,8 +7,9 @@ sealed interface TokenType {
         override val asString: String = "EOF"
     }
 
+    data class Identifier(override val asString: String) : TokenType
+
     sealed interface Literal : TokenType
-    data class Identifier(override val asString: String) : Literal
 
     data class LoxString(override val asString: String) : Literal
 

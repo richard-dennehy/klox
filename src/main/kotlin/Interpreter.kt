@@ -13,14 +13,14 @@ class Interpreter(private val io: IO) {
 
     private fun execute(statement: Statement): String {
         return when (statement) {
-            is Statement.ExpressionStatement -> stringify(evaluate(statement.expression, statement.sourceLine))
+            is Statement.ExpressionStatement -> evaluate(statement.expression, statement.sourceLine).asString
             is Statement.Print -> {
-                io.print(stringify(evaluate(statement.expression, statement.sourceLine)))
+                io.print(evaluate(statement.expression, statement.sourceLine).asString)
                 ""
             }
 
             is Statement.VarDeclaration -> {
-                scope[statement.name] = statement.initialiser?.let { evaluate(it, statement.sourceLine).lit }
+                scope[statement.name] = statement.initialiser?.let { evaluate(it, statement.sourceLine) }
                 ""
             }
 
@@ -34,7 +34,7 @@ class Interpreter(private val io: IO) {
                 }
             }
 
-            is Statement.If -> if (isTruthy(evaluate(statement.condition, statement.sourceLine))) {
+            is Statement.If -> if (evaluate(statement.condition, statement.sourceLine).isTruthy) {
                 execute(statement.thenBranch)
             } else {
                 statement.elseBranch?.let(::execute) ?: ""
@@ -43,7 +43,7 @@ class Interpreter(private val io: IO) {
             is Statement.While -> {
                 var result = ""
                 try {
-                    while (isTruthy(evaluate(statement.condition, statement.sourceLine))) {
+                    while (evaluate(statement.condition, statement.sourceLine).isTruthy) {
                         result = execute(statement.body)
                     }
                 } catch (_: Break) {}
@@ -53,18 +53,11 @@ class Interpreter(private val io: IO) {
         }
     }
 
-    private fun stringify(value: Expression.Literal): String {
-        return when (value.lit) {
-            is TokenType.LoxString -> "\"${value.lit.asString}\""
-            else -> value.lit.asString
-        }
-    }
-
     @Suppress("NAME_SHADOWING")
-    private fun evaluate(expr: Expression, sourceLine: Int): Expression.Literal {
-        fun expectDouble(value: Expression.Literal, sourceLine: Int): Double {
-            return when (value.lit) {
-                is TokenType.LoxNumber -> value.lit.asDouble
+    private fun evaluate(expr: Expression, sourceLine: Int): LoxValue {
+        fun expectDouble(value: LoxValue, sourceLine: Int): Double {
+            return when (value) {
+                is LoxValue.Number -> value.value
                 else -> throw InterpreterResult.Error(
                     sourceLine,
                     "Operand must be a number"
@@ -72,45 +65,37 @@ class Interpreter(private val io: IO) {
             }
         }
 
-        fun loxBoolean(jBool: Boolean): TokenType.KeywordLiteral {
-            return if (jBool) {
-                TokenType.KeywordLiteral.True
-            } else {
-                TokenType.KeywordLiteral.False
-            }
-        }
-
-        val lit = when (expr) {
-            is Expression.Literal -> expr.lit
-            is Expression.Grouping -> evaluate(expr.expression, sourceLine).lit
+        return when (expr) {
+            is Expression.Literal -> LoxValue.from(expr.lit)
+            is Expression.Grouping -> evaluate(expr.expression, sourceLine)
             is Expression.Unary -> {
                 val operand = evaluate(expr.right, sourceLine)
                 when (expr.op) {
                     TokenType.Minus -> {
                         val loxNumber = expectDouble(operand, sourceLine)
-                        TokenType.LoxNumber(-loxNumber)
+                        LoxValue.Number(-loxNumber)
                     }
 
-                    TokenType.Not -> loxBoolean(!isTruthy(operand))
+                    TokenType.Not -> LoxValue.from(!operand.isTruthy)
                 }
             }
 
             is Expression.Variable -> scope[expr.name]
-            is Expression.Assignment -> evaluate(expr.value, sourceLine).lit.also { scope.assign(expr.assignee, it) }
+            is Expression.Assignment -> evaluate(expr.value, sourceLine).also { scope.assign(expr.assignee, it) }
             is Expression.Or -> {
                 val left = evaluate(expr.left, sourceLine)
-                if (isTruthy(left)) {
-                    left.lit
+                if (left.isTruthy) {
+                    left
                 } else {
-                    evaluate(expr.right, sourceLine).lit
+                    evaluate(expr.right, sourceLine)
                 }
             }
             is Expression.And -> {
                 val left = evaluate(expr.left, sourceLine)
-                if (!isTruthy(left)) {
-                    left.lit
+                if (!left.isTruthy) {
+                    left
                 } else {
-                    evaluate(expr.right, sourceLine).lit
+                    evaluate(expr.right, sourceLine)
                 }
             }
 
@@ -123,7 +108,7 @@ class Interpreter(private val io: IO) {
                         val left = expectDouble(left, sourceLine)
                         val right = expectDouble(right, sourceLine)
 
-                        TokenType.LoxNumber(left * right)
+                        LoxValue.Number(left * right)
                     }
 
                     TokenType.Slash -> {
@@ -131,7 +116,7 @@ class Interpreter(private val io: IO) {
                         val right = expectDouble(right, sourceLine)
 
                         if (right != 0.0) {
-                            TokenType.LoxNumber(left / right)
+                            LoxValue.Number(left / right)
                         } else {
                             throw InterpreterResult.Error(
                                 sourceLine,
@@ -144,15 +129,19 @@ class Interpreter(private val io: IO) {
                         val left = expectDouble(left, sourceLine)
                         val right = expectDouble(right, sourceLine)
 
-                        TokenType.LoxNumber(left - right)
+                        LoxValue.Number(left - right)
                     }
 
                     TokenType.Plus -> {
-                        if (left.lit is TokenType.LoxString || right.lit is TokenType.LoxString) {
-                            TokenType.LoxString(left.lit.asString + right.lit.asString)
-                        } else if (left.lit is TokenType.LoxNumber) {
-                            if (right.lit is TokenType.LoxNumber) {
-                                TokenType.LoxNumber(left.lit.asDouble + right.lit.asDouble)
+                        if (left is LoxValue.String && right is LoxValue.String) {
+                            LoxValue.String(left.value + right.value)
+                        } else if (left is LoxValue.String) {
+                            LoxValue.String(left.value + right.asString)
+                        } else if (right is LoxValue.String) {
+                            LoxValue.String(left.asString + right.value)
+                        } else if (left is LoxValue.Number) {
+                            if (right is LoxValue.Number) {
+                                LoxValue.Number(left.value + right.value)
                             } else {
                                 throw InterpreterResult.Error(
                                     sourceLine,
@@ -171,52 +160,42 @@ class Interpreter(private val io: IO) {
                         val left = expectDouble(left, sourceLine)
                         val right = expectDouble(right, sourceLine)
 
-                        loxBoolean(left > right)
+                        LoxValue.from(left > right)
                     }
 
                     TokenType.GreaterThanOrEqual -> {
                         val left = expectDouble(left, sourceLine)
                         val right = expectDouble(right, sourceLine)
 
-                        loxBoolean(left >= right)
+                        LoxValue.from(left >= right)
                     }
 
                     TokenType.LessThan -> {
                         val left = expectDouble(left, sourceLine)
                         val right = expectDouble(right, sourceLine)
 
-                        loxBoolean(left < right)
+                        LoxValue.from(left < right)
                     }
 
                     TokenType.LessThanOrEqual -> {
                         val left = expectDouble(left, sourceLine)
                         val right = expectDouble(right, sourceLine)
 
-                        loxBoolean(left <= right)
+                        LoxValue.from(left <= right)
                     }
 
-                    TokenType.DoubleEquals -> loxBoolean(left.lit == right.lit)
-                    TokenType.NotEqual -> loxBoolean(left.lit != right.lit)
+                    TokenType.DoubleEquals -> LoxValue.from(left == right)
+                    TokenType.NotEqual -> LoxValue.from(left != right)
                 }
             }
-        }
-
-        return Expression.Literal(lit)
-    }
-
-    private fun isTruthy(value: Expression.Literal): Boolean {
-        return when (value.lit) {
-            TokenType.KeywordLiteral.Nil, TokenType.KeywordLiteral.False -> false
-            else -> true
         }
     }
 }
 
-// TODO introduce e.g. LoxValue rather than using Literal everywhere
 private class Environment(private val parent: Environment? = null) {
     private val values: MutableMap<String, LoxVariable> = mutableMapOf()
 
-    operator fun get(name: Token): TokenType.Literal =
+    operator fun get(name: Token): LoxValue =
         when (val maybeInitialised = values[name.type.asString]) {
             is LoxVariable.Initialised -> maybeInitialised.value
             is LoxVariable.Uninitialised -> throw uninitialised(name)
@@ -227,7 +206,7 @@ private class Environment(private val parent: Environment? = null) {
             }
         }
 
-    operator fun set(name: String, value: TokenType.Literal?) {
+    operator fun set(name: String, value: LoxValue?) {
         values[name] = if (value != null) {
             LoxVariable.Initialised(value)
         } else {
@@ -235,7 +214,7 @@ private class Environment(private val parent: Environment? = null) {
         }
     }
 
-    fun assign(name: Token, value: TokenType.Literal) {
+    fun assign(name: Token, value: LoxValue) {
         if (values[name.type.asString] != null) {
             values[name.type.asString] = LoxVariable.Initialised(value)
         } else if (parent != null) {
@@ -256,7 +235,7 @@ private class Environment(private val parent: Environment? = null) {
 
 sealed interface LoxVariable {
     object Uninitialised : LoxVariable
-    data class Initialised(val value: TokenType.Literal) : LoxVariable
+    data class Initialised(val value: LoxValue) : LoxVariable
 }
 
 sealed interface InterpreterResult {
