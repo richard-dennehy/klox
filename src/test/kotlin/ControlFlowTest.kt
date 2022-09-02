@@ -92,4 +92,80 @@ class ControlFlowTest: InterpreterTest() {
         mustEvaluateTo("for (var i = 5; i > 0; i = i - 1) print i;", "0")
         mustHavePrinted("5", "4", "3", "2", "1")
     }
+
+    @Test
+    fun `for statement initialiser is optional`() {
+        mustEvaluateTo("var i = 5; for (; i > 0; i = i - 1) print i;", "0")
+        mustHavePrinted("5", "4", "3", "2", "1")
+    }
+
+    @Test
+    fun `for statement initialiser does not need to declare a variable`() {
+        mustEvaluateTo("var i; for (i = 5; i > 0; i = i - 1) print i;", "0")
+        mustHavePrinted("5", "4", "3", "2", "1")
+    }
+
+    @Test
+    fun `for statement condition is optional`() {
+        mustEvaluateTo("for (var i = 5; ; i = i - 1) { if (i <= 0) break; print i; }", "0")
+        mustHavePrinted("5", "4", "3", "2", "1")
+    }
+
+    @Test
+    fun `for statement incrementer is optional`() {
+        mustEvaluateTo("for (var i = 5; i > 0;) print i = i - 1;", "")
+        mustHavePrinted("4", "3", "2", "1", "0")
+    }
+
+    @Test
+    fun `breaking out of a while statement`() {
+        mustEvaluateTo("while (true) break;", "")
+    }
+
+    @Test
+    fun `breaking out of for loop`() {
+        mustEvaluateTo("var i = 0; for (; i > 0; i = i + 1) break; i;", "0")
+    }
+
+    @Test
+    fun `breaking out of nested blocks`() {
+        val source = """var worked = "yes"; 
+            |for (var i = 0; i < 10; i = i + 1) {
+            |  if (true) {
+            |    if (false) {
+            |       worked = "no";
+            |    } else {
+            |       break;
+            |       worked = "no";
+            |    }
+            |    worked = "no";
+            |  }
+            |  
+            |  worked = "no";
+            |} 
+            |worked;""".trimMargin()
+        mustEvaluateTo(source, "\"yes\"")
+    }
+
+    @Test
+    fun `breaking out of nested loops`() {
+        val source = """var i = 0; var j = 0;
+            |for (; i < 5; i = i + 1) {
+            |  for (;; j = j + 1) {
+            |    if (j > 1) break;
+            |  }
+            |}
+            |print i;
+            |print j;
+        """.trimMargin()
+        mustEvaluateTo(source, "")
+        mustHavePrinted("5", "2")
+    }
+
+    @Test
+    fun `break cannot appear outside of loop`() {
+        mustFailParsing("break;", "[line 1] Error at ';': 'break' not inside a loop.")
+        mustFailParsing("if (true) break;", "[line 1] Error at ';': 'break' not inside a loop.")
+        mustFailParsing("{ break; }", "[line 1] Error at ';': 'break' not inside a loop.")
+    }
 }

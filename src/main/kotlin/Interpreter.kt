@@ -1,3 +1,5 @@
+import java.lang.Exception
+
 class Interpreter(private val io: IO) {
     private var scope = Environment()
 
@@ -40,11 +42,14 @@ class Interpreter(private val io: IO) {
 
             is Statement.While -> {
                 var result = ""
-                while (isTruthy(evaluate(statement.condition))) {
-                    result = execute(statement.body)
-                }
+                try {
+                    while (isTruthy(evaluate(statement.condition))) {
+                        result = execute(statement.body)
+                    }
+                } catch (_: Break) {}
                 result
             }
+            is Statement.Break -> throw Break
         }
     }
 
@@ -258,3 +263,5 @@ sealed interface InterpreterResult {
     data class Success(val data: String?) : InterpreterResult
     data class Error(val token: Token, override val message: String?) : RuntimeException(), InterpreterResult
 }
+
+private object Break: Exception()

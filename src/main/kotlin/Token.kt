@@ -42,6 +42,7 @@ sealed interface TokenType {
 
     enum class Keyword(override val asString: String): TokenType {
         And("and"),
+        Break("break"),
         Class("class"),
         Else("else"),
         Fun("fun"),

@@ -2,8 +2,6 @@ import java.lang.RuntimeException
 
 // TODO it only makes sense to call this once per list, so the interface should be a function, not a class
 class Parser(private val tokens: List<Token>) {
-    class ParseError : RuntimeException("Parse error")
-
     private val errors = ParseErrors(mutableListOf())
     private var current = 0
 
@@ -12,7 +10,7 @@ class Parser(private val tokens: List<Token>) {
         val statements = mutableListOf<Statement>()
 
         while (moreTokens()) {
-            val declaration = declaration()
+            val declaration = declaration(breakable = false)
             if (declaration != null) {
                 statements.add(declaration)
             }
@@ -21,13 +19,13 @@ class Parser(private val tokens: List<Token>) {
         return ParseResult(statements, errors.asList())
     }
 
-    private fun declaration(): Statement? {
+    private fun declaration(breakable: Boolean): Statement? {
         return try {
             val varToken = match(TokenType.Keyword.Var)
             if (varToken != null) {
                 varDeclaration()
             } else {
-                statement()
+                statement(breakable)
             }
         } catch (error: ParseError) {
             synchronise()
@@ -54,8 +52,9 @@ class Parser(private val tokens: List<Token>) {
         return Statement.VarDeclaration(name, initialiser)
     }
 
-    private fun statement(): Statement {
+    private fun statement(breakable: Boolean): Statement {
         val matched = match(
+            TokenType.Keyword.Break,
             TokenType.Keyword.For,
             TokenType.Keyword.If,
             TokenType.LeftBrace,
@@ -64,10 +63,16 @@ class Parser(private val tokens: List<Token>) {
         )
         return when (matched?.first) {
             TokenType.Keyword.Print -> printStatement()
-            TokenType.LeftBrace -> block()
-            TokenType.Keyword.If -> ifStatement()
+            TokenType.LeftBrace -> block(breakable)
+            TokenType.Keyword.If -> ifStatement(breakable)
             TokenType.Keyword.While -> whileStatement()
             TokenType.Keyword.For -> forStatement(matched.second)
+            TokenType.Keyword.Break -> if (breakable) {
+                consume(TokenType.Semicolon, "Expect ';' after 'break'.")
+                Statement.Break
+            } else {
+                parseError("'break' not inside a loop.")
+            }
             else -> expressionStatement()
         }
     }
@@ -78,11 +83,11 @@ class Parser(private val tokens: List<Token>) {
         return Statement.Print(value)
     }
 
-    private fun block(): Statement.Block {
+    private fun block(breakable: Boolean): Statement.Block {
         val statements = mutableListOf<Statement>()
 
         while (!check(TokenType.RightBrace) && moreTokens()) {
-            declaration().let {
+            declaration(breakable).let {
                 if (it != null) statements.add(it)
             }
         }
@@ -91,13 +96,13 @@ class Parser(private val tokens: List<Token>) {
         return Statement.Block(statements.toList())
     }
 
-    private fun ifStatement(): Statement.If {
+    private fun ifStatement(breakable: Boolean): Statement.If {
         consume(TokenType.LeftParenthesis, "Expect '(' after 'if'.")
         val condition = expression()
         consume(TokenType.RightParenthesis, "Expect ')' after if condition.")
 
-        val thenBranch = statement()
-        val elseBranch = match(TokenType.Keyword.Else)?.let { statement() }
+        val thenBranch = statement(breakable)
+        val elseBranch = match(TokenType.Keyword.Else)?.let { statement(breakable) }
 
         return Statement.If(condition, thenBranch, elseBranch)
     }
@@ -106,7 +111,7 @@ class Parser(private val tokens: List<Token>) {
         consume(TokenType.LeftParenthesis, "Expect '(' after 'while'.")
         val condition = expression()
         consume(TokenType.RightParenthesis, "Expect ')' after while condition.")
-        val body = statement()
+        val body = statement(breakable = true)
 
         return Statement.While(condition, body)
     }
@@ -133,7 +138,7 @@ class Parser(private val tokens: List<Token>) {
         }
         consume(TokenType.RightParenthesis, "Expect ')' after for clauses.")
 
-        var body = statement()
+        var body = statement(breakable = true)
 
         if (increment != null) {
             body = Statement.Block(listOf(body, Statement.ExpressionStatement(increment)))
@@ -349,3 +354,5 @@ class ParseErrors(internal var underlying: MutableList<String>) {
         return underlying.toList()
     }
 }
+
+private class ParseError : RuntimeException("Parse error")
