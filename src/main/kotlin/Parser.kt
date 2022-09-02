@@ -346,7 +346,7 @@ class ParseErrors(internal var underlying: MutableList<String>) {
         if (token.type == TokenType.EOF) {
             recordError(message, token.line, " at end")
         } else {
-            recordError(message, token.line, " at '${token.lexeme}'")
+            recordError(message, token.line, " at '${token.type.asString}'")
         }
     }
 

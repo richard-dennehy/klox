@@ -62,11 +62,11 @@ class Interpreter(private val io: IO) {
 
     @Suppress("NAME_SHADOWING")
     private fun evaluate(expr: Expression): Expression.Literal {
-        fun expectDouble(value: Expression.Literal, context: TokenType, sourceLine: Int): Double {
+        fun expectDouble(value: Expression.Literal, sourceLine: Int): Double {
             return when (value.lit) {
                 is TokenType.LoxNumber -> value.lit.asDouble
                 else -> throw InterpreterResult.Error(
-                    Token(context, context.asString, sourceLine),
+                    sourceLine,
                     "Operand must be a number"
                 )
             }
@@ -87,7 +87,7 @@ class Interpreter(private val io: IO) {
                 val operand = evaluate(expr.right)
                 when (expr.op) {
                     TokenType.Minus -> {
-                        val loxNumber = expectDouble(operand, expr.op, expr.sourceLine)
+                        val loxNumber = expectDouble(operand, expr.sourceLine)
                         TokenType.LoxNumber(-loxNumber)
                     }
 
@@ -120,29 +120,29 @@ class Interpreter(private val io: IO) {
 
                 when (expr.op) {
                     TokenType.Asterisk -> {
-                        val left = expectDouble(left, expr.op, expr.sourceLine)
-                        val right = expectDouble(right, expr.op, expr.sourceLine)
+                        val left = expectDouble(left, expr.sourceLine)
+                        val right = expectDouble(right, expr.sourceLine)
 
                         TokenType.LoxNumber(left * right)
                     }
 
                     TokenType.Slash -> {
-                        val left = expectDouble(left, expr.op, expr.sourceLine)
-                        val right = expectDouble(right, expr.op, expr.sourceLine)
+                        val left = expectDouble(left, expr.sourceLine)
+                        val right = expectDouble(right, expr.sourceLine)
 
                         if (right != 0.0) {
                             TokenType.LoxNumber(left / right)
                         } else {
                             throw InterpreterResult.Error(
-                                Token(expr.op, expr.op.asString, expr.sourceLine),
+                                expr.sourceLine,
                                 "Division by zero"
                             )
                         }
                     }
 
                     TokenType.Minus -> {
-                        val left = expectDouble(left, expr.op, expr.sourceLine)
-                        val right = expectDouble(right, expr.op, expr.sourceLine)
+                        val left = expectDouble(left, expr.sourceLine)
+                        val right = expectDouble(right, expr.sourceLine)
 
                         TokenType.LoxNumber(left - right)
                     }
@@ -155,42 +155,42 @@ class Interpreter(private val io: IO) {
                                 TokenType.LoxNumber(left.lit.asDouble + right.lit.asDouble)
                             } else {
                                 throw InterpreterResult.Error(
-                                    Token(expr.op, expr.op.asString, expr.sourceLine),
+                                    expr.sourceLine,
                                     "Operand must be a string or a number"
                                 )
                             }
                         } else {
                             throw InterpreterResult.Error(
-                                Token(expr.op, expr.op.asString, expr.sourceLine),
+                                expr.sourceLine,
                                 "Operand must be a string or a number"
                             )
                         }
                     }
 
                     TokenType.GreaterThan -> {
-                        val left = expectDouble(left, expr.op, expr.sourceLine)
-                        val right = expectDouble(right, expr.op, expr.sourceLine)
+                        val left = expectDouble(left, expr.sourceLine)
+                        val right = expectDouble(right, expr.sourceLine)
 
                         loxBoolean(left > right)
                     }
 
                     TokenType.GreaterThanOrEqual -> {
-                        val left = expectDouble(left, expr.op, expr.sourceLine)
-                        val right = expectDouble(right, expr.op, expr.sourceLine)
+                        val left = expectDouble(left, expr.sourceLine)
+                        val right = expectDouble(right, expr.sourceLine)
 
                         loxBoolean(left >= right)
                     }
 
                     TokenType.LessThan -> {
-                        val left = expectDouble(left, expr.op, expr.sourceLine)
-                        val right = expectDouble(right, expr.op, expr.sourceLine)
+                        val left = expectDouble(left, expr.sourceLine)
+                        val right = expectDouble(right, expr.sourceLine)
 
                         loxBoolean(left < right)
                     }
 
                     TokenType.LessThanOrEqual -> {
-                        val left = expectDouble(left, expr.op, expr.sourceLine)
-                        val right = expectDouble(right, expr.op, expr.sourceLine)
+                        val left = expectDouble(left, expr.sourceLine)
+                        val right = expectDouble(right, expr.sourceLine)
 
                         loxBoolean(left <= right)
                     }
@@ -217,7 +217,7 @@ private class Environment(private val parent: Environment? = null) {
     private val values: MutableMap<String, LoxVariable> = mutableMapOf()
 
     operator fun get(name: Token): TokenType.Literal =
-        when (val maybeInitialised = values[name.lexeme]) {
+        when (val maybeInitialised = values[name.type.asString]) {
             is LoxVariable.Initialised -> maybeInitialised.value
             is LoxVariable.Uninitialised -> throw uninitialised(name)
             null -> if (parent != null) {
@@ -236,8 +236,8 @@ private class Environment(private val parent: Environment? = null) {
     }
 
     fun assign(name: Token, value: TokenType.Literal) {
-        if (values[name.lexeme] != null) {
-            values[name.lexeme] = LoxVariable.Initialised(value)
+        if (values[name.type.asString] != null) {
+            values[name.type.asString] = LoxVariable.Initialised(value)
         } else if (parent != null) {
             parent.assign(name, value)
         } else {
@@ -246,11 +246,11 @@ private class Environment(private val parent: Environment? = null) {
     }
 
     private fun undefined(token: Token): InterpreterResult.Error {
-        return InterpreterResult.Error(token, "Undefined variable `${token.lexeme}`.")
+        return InterpreterResult.Error(token.line, "Undefined variable `${token.type.asString}`.")
     }
 
     private fun uninitialised(token: Token): InterpreterResult.Error {
-        return InterpreterResult.Error(token, "Uninitialised variable `${token.lexeme}`")
+        return InterpreterResult.Error(token.line, "Uninitialised variable `${token.type.asString}`")
     }
 }
 
@@ -261,7 +261,9 @@ sealed interface LoxVariable {
 
 sealed interface InterpreterResult {
     data class Success(val data: String?) : InterpreterResult
-    data class Error(val token: Token, override val message: String?) : RuntimeException(), InterpreterResult
+    class Error(line: Int, msg: String) : RuntimeException(), InterpreterResult {
+        override val message: String = "${msg}\n[line ${line}]"
+    }
 }
 
 private object Break: Exception()

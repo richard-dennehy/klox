@@ -51,7 +51,7 @@ class Runner(io: IO) {
                 when (val result = interpreter.interpret(parseResult.statements)) {
                     is InterpreterResult.Success -> RunResult.Success(result.data ?: "")
                     is InterpreterResult.Error -> {
-                        RunResult.InterpreterError("${result.message}\n[line ${result.token.line}]")
+                        RunResult.InterpreterError(result.message)
                     }
                 }
             } else {

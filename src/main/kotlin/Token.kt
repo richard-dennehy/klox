@@ -1,4 +1,4 @@
-data class Token(val type: TokenType, val lexeme: String, val line: Int)
+data class Token(val type: TokenType, val line: Int)
 
 sealed interface TokenType {
     val asString: String

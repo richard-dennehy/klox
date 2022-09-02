@@ -14,7 +14,7 @@ class Scanner(private val source: String) {
             next = advance()
         }
 
-        tokens.add(Token(TokenType.EOF, "", line))
+        tokens.add(Token(TokenType.EOF, line))
         return ScanResult(tokens.toList(), parseErrors.asList())
     }
 
@@ -78,7 +78,7 @@ class Scanner(private val source: String) {
             }
         }
 
-        tokens.add(Token(token, source.substring(start, current), line))
+        tokens.add(Token(token, line))
     }
 
     private fun advance(): Char? = source.getOrNull(current++)
