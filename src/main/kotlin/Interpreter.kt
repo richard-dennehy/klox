@@ -1,7 +1,9 @@
 import java.lang.Exception
 
 class Interpreter(private val io: IO) {
-    private var scope = Environment()
+    private var scope = Environment().also {
+        it["clock"] = LoxValue.Function({ _, _ -> LoxValue.Number(io.currentTime()) }, 0, "clock")
+    }
 
     fun interpret(statements: List<Statement>): InterpreterResult {
         return try {
@@ -46,9 +48,13 @@ class Interpreter(private val io: IO) {
                     while (evaluate(statement.condition, statement.sourceLine).isTruthy) {
                         result = execute(statement.body)
                     }
-                } catch (_: Break) {}
+                } catch (_: Break) {
+                }
                 result
             }
+
+            is Statement.Function -> TODO("evaluate function declarations")
+
             is Statement.Break -> throw Break
         }
     }
@@ -90,6 +96,7 @@ class Interpreter(private val io: IO) {
                     evaluate(expr.right, sourceLine)
                 }
             }
+
             is Expression.And -> {
                 val left = evaluate(expr.left, sourceLine)
                 if (!left.isTruthy) {
@@ -97,6 +104,23 @@ class Interpreter(private val io: IO) {
                 } else {
                     evaluate(expr.right, sourceLine)
                 }
+            }
+
+            is Expression.Call -> {
+                val callee = evaluate(expr.callee, sourceLine)
+
+                if (callee !is LoxValue.Function) {
+                    throw InterpreterResult.Error(expr.sourceLine, "Can only call functions and classes.")
+                }
+
+                val args = expr.arguments.map { evaluate(it, sourceLine) }
+                if (args.size != callee.arity) {
+                    throw InterpreterResult.Error(
+                        expr.sourceLine,
+                        "Expected ${callee.arity} arguments but got ${args.size}."
+                    )
+                }
+                callee.call(this, args)
             }
 
             is Expression.Binary -> {
@@ -245,4 +269,4 @@ sealed interface InterpreterResult {
     }
 }
 
-private object Break: Exception()
+private object Break : Exception()

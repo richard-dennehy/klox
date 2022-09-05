@@ -12,6 +12,7 @@ sealed interface Expression {
     data class Assignment(val assignee: Token, val value: Expression) : Expression
     data class And(val left: Expression, val right: Expression) : Expression
     data class Or(val left: Expression, val right: Expression) : Expression
+    data class Call(val callee: Expression, val arguments: List<Expression>, val sourceLine: Int): Expression
 }
 
 sealed interface Statement {
@@ -30,4 +31,7 @@ sealed interface Statement {
 
     data class While(val condition: Expression, val body: Statement, override val sourceLine: Int) : Statement
     data class Break(override val sourceLine: Int) : Statement
+    data class Function(val name: Token, val parameters: List<Token>, val body: List<Statement>): Statement {
+        override val sourceLine = name.line
+    }
 }

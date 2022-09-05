@@ -24,11 +24,11 @@ private class Parser(private val tokens: List<Token>) {
 
     private fun declaration(breakable: Boolean): Statement? {
         return try {
-            val varToken = match(TokenType.Keyword.Var)
-            if (varToken != null) {
-                varDeclaration(varToken.line)
-            } else {
-                statement(breakable)
+            val token = match(TokenType.Keyword.Fun, TokenType.Keyword.Var)
+            when (token?.type) {
+                TokenType.Keyword.Fun -> function("function")
+                TokenType.Keyword.Var -> varDeclaration(token.line)
+                else -> statement(breakable)
             }
         } catch (error: ParseError) {
             synchronise()
@@ -76,6 +76,7 @@ private class Parser(private val tokens: List<Token>) {
             } else {
                 parseError("'break' not inside a loop.")
             }
+
             else -> expressionStatement()
         }
     }
@@ -96,7 +97,7 @@ private class Parser(private val tokens: List<Token>) {
         }
         consume(TokenType.RightBrace, "Expect '}' after block.")
 
-        return Statement.Block(statements.toList(), sourceLine)
+        return Statement.Block(statements, sourceLine)
     }
 
     private fun ifStatement(sourceLine: Int, breakable: Boolean): Statement.If {
@@ -164,6 +165,36 @@ private class Parser(private val tokens: List<Token>) {
         return Statement.ExpressionStatement(expr, sourceLine)
     }
 
+    private fun function(kind: String): Statement.Function {
+        val name = if (peek()?.type is TokenType.Identifier) {
+            advance()!!
+        } else {
+            parseError("Expect $kind name.")
+        }
+
+        consume(TokenType.LeftParenthesis, "Expect '(' after $kind name.")
+        val parameters = mutableListOf<Token>()
+        if (!check(TokenType.RightParenthesis)) {
+            do {
+                if (parameters.size >= 255) {
+                    errors.recordError(peek() ?: tokens.last(), "Can't have more than 255 parameters.")
+                }
+
+                if (peek()?.type is TokenType.Identifier) {
+                    parameters.add(advance()!!)
+                } else {
+                    parseError("Expect parameter name.")
+                }
+            } while (match(TokenType.Comma) != null)
+        }
+
+        consume(TokenType.RightParenthesis, "Expect ')' after parameters.")
+        consume(TokenType.LeftBrace, "Expect '{' before $kind body.")
+        val body = block(name.line, false)
+
+        return Statement.Function(name, parameters, body.statements)
+    }
+
     private fun expression(): Expression {
         return assignment()
     }
@@ -211,21 +242,16 @@ private class Parser(private val tokens: List<Token>) {
 
     private fun equality(): Expression = binary({ comparison() }, TokenType.DoubleEquals, TokenType.NotEqual)
 
-    private fun comparison(): Expression =
-        binary(
-            { term() },
-            TokenType.GreaterThan,
-            TokenType.GreaterThanOrEqual,
-            TokenType.LessThanOrEqual,
-            TokenType.LessThan
-        )
+    private fun comparison(): Expression = binary(
+        { term() }, TokenType.GreaterThan, TokenType.GreaterThanOrEqual, TokenType.LessThanOrEqual, TokenType.LessThan
+    )
 
     private fun term(): Expression = binary({ factor() }, TokenType.Minus, TokenType.Plus)
 
     private fun factor(): Expression = binary({ unary() }, TokenType.Slash, TokenType.Asterisk)
 
     private fun unary(): Expression {
-        val token = match(TokenType.Not, TokenType.Minus) ?: return primary()
+        val token = match(TokenType.Not, TokenType.Minus) ?: return call()
         return Expression.Unary(token.type as TokenType.UnaryOp, unary())
     }
 
@@ -240,6 +266,37 @@ private class Parser(private val tokens: List<Token>) {
         }
 
         return expr
+    }
+
+    private fun call(): Expression {
+        var expression = primary()
+
+        // apparently there's good reason for this weirdness
+        while (true) {
+            if (match(TokenType.LeftParenthesis) != null) {
+                expression = finishCall(expression)
+            } else {
+                break
+            }
+        }
+
+        return expression
+    }
+
+    private fun finishCall(callee: Expression): Expression {
+        val arguments = mutableListOf<Expression>()
+        if (!check(TokenType.RightParenthesis)) {
+            do {
+                if (arguments.size >= 255) {
+                    errors.recordError(peek() ?: tokens.last(), "Can't have more than 255 arguments.")
+                }
+                arguments.add(expression())
+            } while (match(TokenType.Comma) != null)
+        }
+
+        val closeParen = consume(TokenType.RightParenthesis, "Expect ')' after arguments.")
+
+        return Expression.Call(callee, arguments, closeParen.line)
     }
 
     private fun primary(): Expression {
@@ -284,12 +341,11 @@ private class Parser(private val tokens: List<Token>) {
         return null
     }
 
-    private fun consume(tokenType: TokenType, errorMessage: String): Token? {
-        if (check(tokenType)) {
-            return advance()
+    private fun consume(tokenType: TokenType, errorMessage: String): Token {
+        when (val token = match(tokenType)) {
+            null -> parseError(errorMessage)
+            else -> return token
         }
-
-        parseError(errorMessage)
     }
 
     private fun check(token: TokenType): Boolean {

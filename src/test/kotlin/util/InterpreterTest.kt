@@ -10,16 +10,19 @@ import kotlin.test.fail
 abstract class InterpreterTest {
     class TestIO: IO {
         val printed = mutableListOf<String>()
+        var frozenTime: Double? = null
 
         override fun print(text: String) = printed.add(text).run {}
+        override fun currentTime(): Double = frozenTime ?: (System.currentTimeMillis() / 1000.0)
     }
 
-    val testIO = TestIO()
-    val runner = Runner(testIO)
+    private val testIO = TestIO()
+    private val runner = Runner(testIO)
 
     @BeforeEach
     fun reset() {
         testIO.printed.clear()
+        testIO.frozenTime = null
     }
 
     fun RunResult.stringified(): String {
@@ -60,5 +63,9 @@ abstract class InterpreterTest {
 
     fun mustHaveNotPrinted() {
         assertEquals(listOf(), testIO.printed.toList())
+    }
+
+    fun freezeTime(time: Double) {
+        testIO.frozenTime = time
     }
 }

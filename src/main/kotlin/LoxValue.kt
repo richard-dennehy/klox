@@ -12,6 +12,7 @@ sealed class LoxValue(val asString: kotlin.String) {
 
     data class String(val value: kotlin.String) : LoxValue("\"$value\"")
     data class Number(val value: Double) : LoxValue(value.toString().removeSuffix(".0"))
+    class Function(val call: (Interpreter, List<LoxValue>) -> LoxValue, val arity: Int, name: kotlin.String): LoxValue("fn <$name>")
 
     companion object {
         fun from(value: Boolean): LoxValue = if (value) {
