@@ -31,7 +31,8 @@ sealed interface Statement {
 
     data class While(val condition: Expression, val body: Statement, override val sourceLine: Int) : Statement
     data class Break(override val sourceLine: Int) : Statement
-    data class Function(val name: Token, val parameters: List<Token>, val body: List<Statement>): Statement {
+    data class Function(val name: Token, val parameters: List<Token>, val body: Block): Statement {
         override val sourceLine = name.line
     }
+    data class Return(val value: Expression?, override val sourceLine: Int): Statement
 }

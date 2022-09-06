@@ -62,6 +62,7 @@ private class Parser(private val tokens: List<Token>) {
             TokenType.Keyword.If,
             TokenType.LeftBrace,
             TokenType.Keyword.Print,
+            TokenType.Keyword.Return,
             TokenType.Keyword.While,
         )
         return when (matched?.type) {
@@ -75,6 +76,16 @@ private class Parser(private val tokens: List<Token>) {
                 Statement.Break(matched.line)
             } else {
                 parseError("'break' not inside a loop.")
+            }
+            TokenType.Keyword.Return -> {
+                val value = if (!check(TokenType.Semicolon)) {
+                    expression()
+                } else {
+                    null
+                }
+
+                consume(TokenType.Semicolon, "Expect ';' after return value.")
+                Statement.Return(value, matched.line)
             }
 
             else -> expressionStatement()
@@ -192,7 +203,7 @@ private class Parser(private val tokens: List<Token>) {
         consume(TokenType.LeftBrace, "Expect '{' before $kind body.")
         val body = block(name.line, false)
 
-        return Statement.Function(name, parameters, body.statements)
+        return Statement.Function(name, parameters, body)
     }
 
     private fun expression(): Expression {

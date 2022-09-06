@@ -1,8 +1,6 @@
-import java.lang.Exception
-
 class Interpreter(private val io: IO) {
     private var scope = Environment().also {
-        it["clock"] = LoxValue.Function({ _, _ -> LoxValue.Number(io.currentTime()) }, 0, "clock")
+        it["clock"] = LoxValue.Function("clock", 0, Environment()) { _, _, _ -> LoxValue.Number(io.currentTime()) }
     }
 
     fun interpret(statements: List<Statement>): InterpreterResult {
@@ -53,7 +51,31 @@ class Interpreter(private val io: IO) {
                 result
             }
 
-            is Statement.Function -> TODO("evaluate function declarations")
+            is Statement.Function -> {
+                val function = LoxValue.Function(statement.name.type.asString, statement.parameters.size, scope) { interpreter, closure, arguments ->
+                    var returnValue: LoxValue = LoxValue.Nil
+
+                    val previous = interpreter.scope
+                    interpreter.scope = Environment(closure)
+                    try {
+                        statement.parameters.zip(arguments).forEach { (param, value) ->
+                            interpreter.scope[param.type.asString] = value
+                        }
+                        interpreter.execute(statement.body)
+                    } catch (r: Return) {
+                        returnValue = r.value
+                    } finally {
+                        interpreter.scope = previous
+                    }
+
+                    returnValue
+                }
+                scope[statement.name.type.asString] = function
+                ""
+            }
+
+            is Statement.Return -> throw Return(statement.value?.let { evaluate(it, statement.sourceLine) }
+                ?: LoxValue.Nil)
 
             is Statement.Break -> throw Break
         }
@@ -120,7 +142,7 @@ class Interpreter(private val io: IO) {
                         "Expected ${callee.arity} arguments but got ${args.size}."
                     )
                 }
-                callee.call(this, args)
+                callee.call(this, callee.closure, args)
             }
 
             is Expression.Binary -> {
@@ -216,7 +238,7 @@ class Interpreter(private val io: IO) {
     }
 }
 
-private class Environment(private val parent: Environment? = null) {
+class Environment(private val parent: Environment? = null) {
     private val values: MutableMap<String, LoxVariable> = mutableMapOf()
 
     operator fun get(name: Token): LoxValue =
@@ -269,4 +291,5 @@ sealed interface InterpreterResult {
     }
 }
 
-private object Break : Exception()
+private object Break : RuntimeException()
+private class Return(val value: LoxValue) : RuntimeException()
