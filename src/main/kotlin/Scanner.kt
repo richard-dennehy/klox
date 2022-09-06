@@ -134,7 +134,7 @@ private class Scanner(private val source: String) {
     }
 
     private fun identifier(): TokenType {
-        while (peek() in 'A'..'z' || peek() == '_') advance()
+        while (peek() in 'A'..'z' || peek() == '_' || peek() in '0'..'9') advance()
 
         val text = source.substring(start, current)
         return TokenType.Keyword.values().find { it.asString == text }

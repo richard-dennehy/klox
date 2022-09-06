@@ -1,6 +1,5 @@
 import org.junit.jupiter.api.Test
 import util.InterpreterTest
-import kotlin.test.Ignore
 
 class ControlFlowTest: InterpreterTest() {
 
@@ -50,9 +49,9 @@ class ControlFlowTest: InterpreterTest() {
     }
 
     @Test
-    @Ignore("Can't demonstrate this until functions are implemented")
     fun `or does not evaluate right operand if left operand is truthy`() {
-        TODO()
+        mustEvaluateTo("fun debug(value) { print value; return value; } debug(true) or debug(false);", "true")
+        mustHavePrinted("true")
     }
 
     @Test
@@ -66,9 +65,9 @@ class ControlFlowTest: InterpreterTest() {
     }
 
     @Test
-    @Ignore("Can't demonstrate this until functions are implemented")
     fun `and does not evaluate right operand if left operand is falsy`() {
-        TODO()
+        mustEvaluateTo("fun debug(value) { print value; return value; } debug(false) and debug(true);", "false")
+        mustHavePrinted("false")
     }
 
     @Test
@@ -78,36 +77,31 @@ class ControlFlowTest: InterpreterTest() {
     }
 
     @Test
-    fun `while prints result of last statement in REPL`() {
-        mustEvaluateTo("var i = 5; while (i > 0) i = i - 1;", "0")
-    }
-
-    @Test
     fun `while statement must have body`() {
         mustFailParsing("while (false)", "[line 1] Error at end: Expected expression.")
     }
 
     @Test
     fun `for statement`() {
-        mustEvaluateTo("for (var i = 5; i > 0; i = i - 1) print i;", "0")
+        mustEvaluateTo("for (var i = 5; i > 0; i = i - 1) print i;", "")
         mustHavePrinted("5", "4", "3", "2", "1")
     }
 
     @Test
     fun `for statement initialiser is optional`() {
-        mustEvaluateTo("var i = 5; for (; i > 0; i = i - 1) print i;", "0")
+        mustEvaluateTo("var i = 5; for (; i > 0; i = i - 1) print i;", "")
         mustHavePrinted("5", "4", "3", "2", "1")
     }
 
     @Test
     fun `for statement initialiser does not need to declare a variable`() {
-        mustEvaluateTo("var i; for (i = 5; i > 0; i = i - 1) print i;", "0")
+        mustEvaluateTo("var i; for (i = 5; i > 0; i = i - 1) print i;", "")
         mustHavePrinted("5", "4", "3", "2", "1")
     }
 
     @Test
     fun `for statement condition is optional`() {
-        mustEvaluateTo("for (var i = 5; ; i = i - 1) { if (i <= 0) break; print i; }", "0")
+        mustEvaluateTo("for (var i = 5; ; i = i - 1) { if (i <= 0) break; print i; }", "")
         mustHavePrinted("5", "4", "3", "2", "1")
     }
 

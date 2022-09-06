@@ -15,7 +15,10 @@ class Interpreter(private val io: IO) {
         return when (statement) {
             is Statement.ExpressionStatement -> evaluate(statement.expression, statement.sourceLine).asString
             is Statement.Print -> {
-                io.print(evaluate(statement.expression, statement.sourceLine).asString)
+                io.print(when (val result = evaluate(statement.expression, statement.sourceLine)) {
+                    is LoxValue.String -> result.value
+                    else -> result.asString
+                })
                 ""
             }
 
@@ -41,14 +44,12 @@ class Interpreter(private val io: IO) {
             }
 
             is Statement.While -> {
-                var result = ""
                 try {
                     while (evaluate(statement.condition, statement.sourceLine).isTruthy) {
-                        result = execute(statement.body)
+                        execute(statement.body)
                     }
-                } catch (_: Break) {
-                }
-                result
+                } catch (_: Break) { }
+                ""
             }
 
             is Statement.Function -> {

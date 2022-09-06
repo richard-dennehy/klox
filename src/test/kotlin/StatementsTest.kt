@@ -8,6 +8,11 @@ class StatementsTest: InterpreterTest() {
     }
 
     @Test
+    fun `variable name containing digit and underscore`() {
+        mustEvaluateTo("var a1_ = 1; a1_;", "1")
+    }
+
+    @Test
     fun `variable declaration using expression result`() {
         mustEvaluateTo("var a = 2 + 3; a;", "5")
     }
