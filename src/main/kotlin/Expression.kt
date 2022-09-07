@@ -13,6 +13,7 @@ sealed interface Expression {
     data class And(val left: Expression, val right: Expression) : Expression
     data class Or(val left: Expression, val right: Expression) : Expression
     data class Call(val callee: Expression, val arguments: List<Expression>, val sourceLine: Int): Expression
+    data class Function(val parameters: List<Token>, val body: Statement.Block): Expression
 }
 
 sealed interface Statement {

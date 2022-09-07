@@ -26,7 +26,7 @@ private class Parser(private val tokens: List<Token>) {
         return try {
             val token = match(TokenType.Keyword.Fun, TokenType.Keyword.Var)
             when (token?.type) {
-                TokenType.Keyword.Fun -> function("function")
+                TokenType.Keyword.Fun -> namedFunction("function")
                 TokenType.Keyword.Var -> varDeclaration(token.line)
                 else -> statement(breakable, returnable)
             }
@@ -178,13 +178,20 @@ private class Parser(private val tokens: List<Token>) {
         return Statement.ExpressionStatement(expr, sourceLine)
     }
 
-    private fun function(kind: String): Statement.Function {
+    // TODO could probably simplify this to rewrite all expressions `fun name(args) {...}` to `var name = fun (args) {...}` but need to implement class methods first
+    private fun namedFunction(kind: String): Statement.Function {
         val name = if (peek()?.type is TokenType.Identifier) {
             advance()!!
         } else {
             parseError("Expect $kind name.")
         }
 
+        val (parameters, body) = function(name.line, kind)
+
+        return Statement.Function(name, parameters, body)
+    }
+
+    private fun function(sourceLine: Int, kind: String): Pair<List<Token>, Statement.Block> {
         consume(TokenType.LeftParenthesis, "Expect '(' after $kind name.")
         val parameters = mutableListOf<Token>()
         if (!check(TokenType.RightParenthesis)) {
@@ -203,9 +210,9 @@ private class Parser(private val tokens: List<Token>) {
 
         consume(TokenType.RightParenthesis, "Expect ')' after parameters.")
         consume(TokenType.LeftBrace, "Expect '{' before $kind body.")
-        val body = block(name.line, breakable = false, returnable = true)
+        val body = block(sourceLine, breakable = false, returnable = true)
 
-        return Statement.Function(name, parameters, body)
+        return parameters to body
     }
 
     private fun expression(): Expression {
@@ -339,6 +346,12 @@ private class Parser(private val tokens: List<Token>) {
         if (next.type is TokenType.Identifier) {
             advance()
             return Expression.Variable(next)
+        }
+
+        if (next.type == TokenType.Keyword.Fun) {
+            advance()
+            val (parameters, body) = function(next.line, "function")
+            return Expression.Function(parameters, body)
         }
 
         parseError("Expected expression.")

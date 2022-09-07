@@ -15,10 +15,12 @@ class Interpreter(private val io: IO) {
         return when (statement) {
             is Statement.ExpressionStatement -> evaluate(statement.expression, statement.sourceLine).asString
             is Statement.Print -> {
-                io.print(when (val result = evaluate(statement.expression, statement.sourceLine)) {
-                    is LoxValue.String -> result.value
-                    else -> result.asString
-                })
+                io.print(
+                    when (val result = evaluate(statement.expression, statement.sourceLine)) {
+                        is LoxValue.String -> result.value
+                        else -> result.asString
+                    }
+                )
                 ""
             }
 
@@ -48,29 +50,16 @@ class Interpreter(private val io: IO) {
                     while (evaluate(statement.condition, statement.sourceLine).isTruthy) {
                         execute(statement.body)
                     }
-                } catch (_: Break) { }
+                } catch (_: Break) {
+                }
                 ""
             }
 
             is Statement.Function -> {
-                val function = LoxValue.Function(statement.name.type.asString, statement.parameters.size, scope) { interpreter, closure, arguments ->
-                    var returnValue: LoxValue = LoxValue.Nil
-
-                    val previous = interpreter.scope
-                    interpreter.scope = Environment(closure)
-                    try {
-                        statement.parameters.zip(arguments).forEach { (param, value) ->
-                            interpreter.scope[param.type.asString] = value
-                        }
-                        interpreter.execute(statement.body)
-                    } catch (r: Return) {
-                        returnValue = r.value
-                    } finally {
-                        interpreter.scope = previous
-                    }
-
-                    returnValue
-                }
+                val function = LoxValue.Function(
+                    statement.name.type.asString, statement.parameters.size, scope,
+                    buildFunctionImpl(statement.parameters, statement.body)
+                )
                 scope[statement.name.type.asString] = function
                 ""
             }
@@ -144,6 +133,10 @@ class Interpreter(private val io: IO) {
                     )
                 }
                 callee.call(this, callee.closure, args)
+            }
+
+            is Expression.Function -> {
+                LoxValue.Function("[anon]", expr.parameters.size, scope, buildFunctionImpl(expr.parameters, expr.body))
             }
 
             is Expression.Binary -> {
@@ -236,6 +229,28 @@ class Interpreter(private val io: IO) {
                 }
             }
         }
+    }
+
+    private fun buildFunctionImpl(
+        parameters: List<Token>,
+        body: Statement.Block
+    ): (Interpreter, Environment, List<LoxValue>) -> LoxValue = { interpreter, closure, arguments ->
+        var returnValue: LoxValue = LoxValue.Nil
+
+        val previous = interpreter.scope
+        interpreter.scope = Environment(closure)
+        try {
+            parameters.zip(arguments).forEach { (param, value) ->
+                interpreter.scope[param.type.asString] = value
+            }
+            interpreter.execute(body)
+        } catch (r: Return) {
+            returnValue = r.value
+        } finally {
+            interpreter.scope = previous
+        }
+
+        returnValue
     }
 }
 
