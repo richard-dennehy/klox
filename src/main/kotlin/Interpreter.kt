@@ -11,6 +11,10 @@ class Interpreter(private val io: IO) {
         }
     }
 
+    fun resolve(expr: Expression, depth: Int) {
+        TODO()
+    }
+
     private fun execute(statement: Statement): String {
         return when (statement) {
             is Statement.ExpressionStatement -> evaluate(statement.expression, statement.sourceLine).asString
