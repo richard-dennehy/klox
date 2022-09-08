@@ -25,22 +25,18 @@ abstract class InterpreterTest {
         testIO.frozenTime = null
     }
 
-    fun RunResult.stringified(): String {
-        return when (this) {
-            is RunResult.InterpreterError -> this.error
-            is RunResult.ParseError -> this.errors.joinToString("\n")
-            is RunResult.Success -> this.data
+    fun mustEvaluateTo(source: String, expected: String) {
+        when(val result = runner.run(source)) {
+            is RunResult.Success -> assertEquals(expected, result.data)
+            else ->
+                fail("Failed to interpret. \nSource\n$source\nResult:\n$result")
         }
-    }
-
-    fun mustEvaluateTo(source: String, result: String) {
-        assertEquals(result, runner.run(source).stringified(), source)
     }
 
     fun mustFailParsing(source: String, expectedError: String) {
         when(val result = runner.run(source)) {
             is RunResult.ParseError ->
-                assertEquals(expectedError, result.stringified(), source)
+                assertEquals(expectedError, result.errors.joinToString("\n"), source)
             else ->
                 fail("Expected parsing to fail, but it succeeded.\nSource:\n$source\nResult:\n$result")
         }
@@ -49,11 +45,22 @@ abstract class InterpreterTest {
     fun mustFailExecution(source: String, expectedError: String) {
         when(val result = runner.run(source)) {
             is RunResult.InterpreterError ->
-                assertEquals(expectedError, result.stringified(), source)
-            is RunResult.ParseError ->
-                fail("Unexpectedly failed parsing.\nSource:\n$source\nResult:\n$result")
+                assertEquals(expectedError, result.error, source)
             is RunResult.Success ->
                 fail("Expected interpreter to fail, but it succeeded.\nSource:\n$source\nResult:\n$result")
+            else ->
+                fail("Failed for unexpected reasons.\nSource:\n$source\nResult:\n$result")
+        }
+    }
+
+    fun mustFailResolving(source: String, expectedError: String) {
+        when (val result = runner.run(source)) {
+            is RunResult.ResolverError ->
+                assertEquals(expectedError, result.errors.joinToString("\n"))
+            is RunResult.Success ->
+                fail("Expected interpreter to fail, but it succeeded.\nSource:\n$source\nResult:\n$result")
+            else ->
+                fail("Failed for unexpected reasons.\nSource:\n$source\nResult:\n$result")
         }
     }
 

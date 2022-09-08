@@ -23,7 +23,7 @@ private fun runFile(path: String) {
 
     when (result) {
         is RunResult.InterpreterError -> exitProcess(70)
-        is RunResult.ParseError -> exitProcess(65)
+        is RunResult.ParseError, is RunResult.ResolverError -> exitProcess(65)
         is RunResult.Success -> {}
     }
 }
@@ -48,11 +48,16 @@ class Runner(io: IO) {
         return if (scanResult.errors.isEmpty()) {
             val parseResult = parse(scanResult.tokens)
             if (parseResult.errors.isEmpty()) {
-                when (val result = interpreter.interpret(parseResult.statements)) {
-                    is InterpreterResult.Success -> RunResult.Success(result.data ?: "")
-                    is InterpreterResult.Error -> {
-                        RunResult.InterpreterError(result.message)
+                val resolvePass = resolve(interpreter, parseResult.statements)
+                if (resolvePass.errors.isEmpty()) {
+                    when (val result = interpreter.interpret(parseResult.statements)) {
+                        is InterpreterResult.Success -> RunResult.Success(result.data ?: "")
+                        is InterpreterResult.Error -> {
+                            RunResult.InterpreterError(result.message)
+                        }
                     }
+                } else {
+                    RunResult.ResolverError(resolvePass.errors)
                 }
             } else {
                 RunResult.ParseError(scanResult.errors + parseResult.errors)
@@ -72,6 +77,10 @@ sealed interface RunResult {
 
     data class InterpreterError(val error: String) : RunResult {
         override fun print() = System.err.println(error)
+    }
+
+    data class ResolverError(val errors: List<String>): RunResult {
+        override fun print() = errors.forEach(System.err::println)
     }
 
     data class Success(val data: String) : RunResult {

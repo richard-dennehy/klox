@@ -1,7 +1,10 @@
 class Interpreter(private val io: IO) {
-    private var scope = Environment().also {
+    private val globals = Environment().also {
         it["clock"] = LoxValue.Function("clock", 0, Environment()) { _, _, _ -> LoxValue.Number(io.currentTime()) }
     }
+
+    private var scope = globals
+    private val locals = mutableMapOf<Expression, Int>()
 
     fun interpret(statements: List<Statement>): InterpreterResult {
         return try {
@@ -12,7 +15,7 @@ class Interpreter(private val io: IO) {
     }
 
     fun resolve(expr: Expression, depth: Int) {
-        TODO()
+        locals[expr] = depth
     }
 
     private fun execute(statement: Statement): String {
@@ -102,8 +105,15 @@ class Interpreter(private val io: IO) {
                 }
             }
 
-            is Expression.Variable -> scope[expr.name]
-            is Expression.Assignment -> evaluate(expr.value, sourceLine).also { scope.assign(expr.assignee, it) }
+            is Expression.Variable -> {
+                locals[expr]?.let { scope.getAt(it, expr.name) } ?: globals[expr.name]
+            }
+            is Expression.Assignment -> evaluate(expr.value, sourceLine).also { value ->
+                when (val distance = locals[expr]) {
+                    null -> globals.assign(expr.assignee, value)
+                    else -> scope.assignAt(distance, expr.assignee, value)
+                }
+            }
             is Expression.Or -> {
                 val left = evaluate(expr.left, sourceLine)
                 if (left.isTruthy) {
@@ -272,6 +282,8 @@ class Environment(private val parent: Environment? = null) {
             }
         }
 
+    fun getAt(distance: Int, name: Token): LoxValue = ancestor(distance)[name]
+
     operator fun set(name: String, value: LoxValue?) {
         values[name] = if (value != null) {
             LoxVariable.Initialised(value)
@@ -288,6 +300,12 @@ class Environment(private val parent: Environment? = null) {
         } else {
             throw undefined(name)
         }
+    }
+
+    fun assignAt(distance: Int, name: Token, value: LoxValue) = ancestor(distance).assign(name, value)
+
+    private fun ancestor(distance: Int): Environment {
+        return (0 until distance).fold(this) { env, _ -> env.parent!! }
     }
 
     private fun undefined(token: Token): InterpreterResult.Error {

@@ -118,9 +118,4 @@ thrice(fun (a) {
         val source = "fun someFunction(${(0..255).joinToString(", ") { "param$it" }}) {}"
         mustFailParsing(source, "[line 1] Error at 'param255': Can't have more than 255 parameters.")
     }
-
-    @Test
-    fun `returning outside a function`() {
-        mustFailParsing("return;", "[line 1] Error at ';': 'return' outside a function declaration.")
-    }
 }

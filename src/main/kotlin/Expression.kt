@@ -1,19 +1,20 @@
+// can't use data classes because each instance needs to have a unique hash
 sealed interface Expression {
-    data class Binary(
+    class Binary(
         val left: Expression,
         val op: TokenType.BinaryOp,
         val right: Expression
     ) : Expression
 
-    data class Grouping(val expression: Expression) : Expression
-    data class Unary(val op: TokenType.UnaryOp, val right: Expression) : Expression
-    data class Literal(val lit: TokenType.Literal) : Expression
-    data class Variable(val name: Token) : Expression
-    data class Assignment(val assignee: Token, val value: Expression) : Expression
-    data class And(val left: Expression, val right: Expression) : Expression
-    data class Or(val left: Expression, val right: Expression) : Expression
-    data class Call(val callee: Expression, val arguments: List<Expression>, val sourceLine: Int): Expression
-    data class Function(val parameters: List<Token>, val body: Statement.Block): Expression
+    class Grouping(val expression: Expression) : Expression
+    class Unary(val op: TokenType.UnaryOp, val right: Expression) : Expression
+    class Literal(val lit: TokenType.Literal) : Expression
+    class Variable(val name: Token) : Expression
+    class Assignment(val assignee: Token, val value: Expression) : Expression
+    class And(val left: Expression, val right: Expression) : Expression
+    class Or(val left: Expression, val right: Expression) : Expression
+    class Call(val callee: Expression, val arguments: List<Expression>, val sourceLine: Int): Expression
+    class Function(val parameters: List<Token>, val body: Statement.Block): Expression
 }
 
 sealed interface Statement {

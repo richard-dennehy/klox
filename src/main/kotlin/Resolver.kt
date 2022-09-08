@@ -5,9 +5,10 @@ fun resolve(interpreter: Interpreter, statements: List<Statement>): ResolveError
 
 data class ResolveErrors(val errors: List<String>)
 
-class Resolver(val interpreter: Interpreter) {
+class Resolver(private val interpreter: Interpreter) {
     private val errors = mutableListOf<String>()
     private val scopes = Stack<MutableMap<String, Boolean>>()
+    private var currentFunction = FunctionType.None
 
     fun resolve(statements: List<Statement>): ResolveErrors {
         statements.forEach(::resolve)
@@ -25,7 +26,7 @@ class Resolver(val interpreter: Interpreter) {
             is Statement.Break -> {}
             is Statement.ExpressionStatement -> resolve(statement.expression)
             is Statement.Function -> {
-                declare(statement.name.type.asString)
+                declare(statement.name.type.asString, statement.sourceLine)
                 define(statement.name.type.asString)
 
                 resolveFunction(statement.parameters, statement.body)
@@ -38,9 +39,14 @@ class Resolver(val interpreter: Interpreter) {
             }
 
             is Statement.Print -> resolve(statement.expression)
-            is Statement.Return -> statement.value?.let(::resolve)
+            is Statement.Return -> {
+                if (currentFunction == FunctionType.None) {
+                    recordError(statement.sourceLine, "return", "Can't return from top-level code.")
+                }
+                statement.value?.let(::resolve)
+            }
             is Statement.VarDeclaration -> {
-                declare(statement.name)
+                declare(statement.name, statement.sourceLine)
                 statement.initialiser?.let(::resolve)
                 define(statement.name)
             }
@@ -85,7 +91,7 @@ class Resolver(val interpreter: Interpreter) {
             is Expression.Unary -> resolve(expr.right)
             is Expression.Variable -> {
                 if (scopes.isNotEmpty() && scopes.peek()[expr.name.type.asString] == false) {
-                    errors.add("[line ${expr.name.line}] Error at ${expr.name.type}: Can't read local variable in its own initialiser.")
+                    recordError(expr.name.line, expr.name.type.asString, "Can't read local variable in its own initialiser.")
                 }
 
                 resolveLocal(expr, expr.name)
@@ -94,13 +100,18 @@ class Resolver(val interpreter: Interpreter) {
     }
 
     private fun resolveFunction(parameters: List<Token>, body: Statement.Block) {
+        val enclosing = currentFunction
+        currentFunction = FunctionType.Function
+
         beginScope()
         parameters.forEach {
-            declare(it.type.asString)
+            declare(it.type.asString, it.line)
             define(it.type.asString)
         }
         resolve(body.statements)
         endScope()
+
+        currentFunction = enclosing
     }
 
     private fun resolveLocal(expr: Expression, name: Token) {
@@ -112,9 +123,13 @@ class Resolver(val interpreter: Interpreter) {
         }
     }
 
-    private fun declare(name: String) {
+    private fun declare(name: String, line: Int) {
         if (scopes.isNotEmpty()) {
-            scopes.peek()[name] = false
+            val scope = scopes.peek()
+            if (scope.containsKey(name)) {
+                recordError(line, name, "Already a variable with this name in this scope.")
+            }
+            scope[name] = false
         }
     }
 
@@ -124,6 +139,15 @@ class Resolver(val interpreter: Interpreter) {
         }
     }
 
-    private fun beginScope() = scopes.push(HashMap())
+    private fun beginScope() = scopes.push(mutableMapOf())
     private fun endScope() = scopes.pop()
+
+    private fun recordError(line: Int, lexeme: String, message: String) {
+        errors.add("[line $line] Error $lexeme: $message")
+    }
+}
+
+enum class FunctionType {
+    Function,
+    None,
 }
