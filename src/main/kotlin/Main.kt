@@ -41,6 +41,7 @@ private fun runPrompt() {
 
 class Runner(io: IO) {
     private val interpreter = Interpreter(io)
+    private val resolver = Resolver(interpreter)
 
     fun run(source: String): RunResult {
         val scanResult = scanTokens(source)
@@ -48,7 +49,7 @@ class Runner(io: IO) {
         return if (scanResult.errors.isEmpty()) {
             val parseResult = parse(scanResult.tokens)
             if (parseResult.errors.isEmpty()) {
-                val resolvePass = resolve(interpreter, parseResult.statements)
+                val resolvePass = resolver.resolve(parseResult.statements)
                 if (resolvePass.errors.isEmpty()) {
                     when (val result = interpreter.interpret(parseResult.statements)) {
                         is InterpreterResult.Success -> RunResult.Success(result.data ?: "")

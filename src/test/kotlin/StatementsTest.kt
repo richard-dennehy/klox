@@ -18,11 +18,6 @@ class StatementsTest: InterpreterTest() {
     }
 
     @Test
-    fun `redeclaring variable`() {
-        mustEvaluateTo("var a = 1; var a = 2; a;", "2")
-    }
-
-    @Test
     fun `variables persist between run calls (for REPL)`() {
         mustEvaluateTo("var a = 1; a;", "1")
         mustEvaluateTo("a;", "1")

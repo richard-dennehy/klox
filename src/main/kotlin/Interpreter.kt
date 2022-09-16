@@ -1,10 +1,10 @@
 class Interpreter(private val io: IO) {
-    private val globals = Environment().also {
-        it["clock"] = LoxValue.Function("clock", 0, Environment()) { _, _, _ -> LoxValue.Number(io.currentTime()) }
-    }
+    private val builtins: MutableMap<String, LoxValue> = mutableMapOf(
+        "clock" to LoxValue.Function("clock", 0, Scope(mutableMapOf())) { _, _, _ -> LoxValue.Number(io.currentTime()) }
+    )
 
-    private var scope = globals
-    private val locals = mutableMapOf<Expression, Int>()
+    private var scope = Scope(builtins)
+    private val locals = mutableMapOf<Expression, VariableMetadata>()
 
     fun interpret(statements: List<Statement>): InterpreterResult {
         return try {
@@ -15,7 +15,7 @@ class Interpreter(private val io: IO) {
     }
 
     fun resolve(expr: Expression, depth: Int, index: Int) {
-        locals[expr] = depth
+        locals[expr] = VariableMetadata(depth, index)
     }
 
     private fun execute(statement: Statement): String {
@@ -32,13 +32,13 @@ class Interpreter(private val io: IO) {
             }
 
             is Statement.VarDeclaration -> {
-                scope[statement.name] = statement.initialiser?.let { evaluate(it, statement.sourceLine) }
+                scope.define(statement.initialiser?.let { evaluate(it, statement.sourceLine) })
                 ""
             }
 
             is Statement.Block -> {
                 val previous = scope
-                scope = Environment(scope)
+                scope = Scope(scope.builtins, scope)
                 try {
                     statement.statements.map(::execute).lastOrNull() ?: ""
                 } finally {
@@ -67,7 +67,7 @@ class Interpreter(private val io: IO) {
                     statement.name.type.asString, statement.parameters.size, scope,
                     buildFunctionImpl(statement.parameters, statement.body)
                 )
-                scope[statement.name.type.asString] = function
+                scope.define(function)
                 ""
             }
 
@@ -106,13 +106,10 @@ class Interpreter(private val io: IO) {
             }
 
             is Expression.Variable -> {
-                locals[expr]?.let { scope.getAt(it, expr.name) } ?: globals[expr.name]
+                scope.getAt(expr.name, locals[expr])
             }
             is Expression.Assignment -> evaluate(expr.value, sourceLine).also { value ->
-                when (val distance = locals[expr]) {
-                    null -> globals.assign(expr.assignee, value)
-                    else -> scope.assignAt(distance, expr.assignee, value)
-                }
+                scope.assignAt(expr.assignee, value, locals[expr])
             }
             is Expression.Or -> {
                 val left = evaluate(expr.left, sourceLine)
@@ -248,14 +245,14 @@ class Interpreter(private val io: IO) {
     private fun buildFunctionImpl(
         parameters: List<Token>,
         body: Statement.Block
-    ): (Interpreter, Environment, List<LoxValue>) -> LoxValue = { interpreter, closure, arguments ->
+    ): (Interpreter, Scope, List<LoxValue>) -> LoxValue = { interpreter, closure, arguments ->
         var returnValue: LoxValue = LoxValue.Nil
 
         val previous = interpreter.scope
-        interpreter.scope = Environment(closure)
+        interpreter.scope = Scope(previous.builtins, closure)
         try {
-            parameters.zip(arguments).forEach { (param, value) ->
-                interpreter.scope[param.type.asString] = value
+            parameters.zip(arguments).forEach { (_, value) ->
+                interpreter.scope.define(value)
             }
             interpreter.execute(body)
         } catch (r: Return) {
@@ -268,43 +265,40 @@ class Interpreter(private val io: IO) {
     }
 }
 
-class Environment(private val parent: Environment? = null) {
-    private val values: MutableMap<String, LoxVariable> = mutableMapOf()
+class Scope(internal val builtins: MutableMap<String, LoxValue>, private val parent: Scope? = null) {
+    private val values: MutableList<VariableState> = mutableListOf()
 
-    operator fun get(name: Token): LoxValue =
-        when (val maybeInitialised = values[name.type.asString]) {
-            is LoxVariable.Initialised -> maybeInitialised.value
-            is LoxVariable.Uninitialised -> throw uninitialised(name)
-            null -> if (parent != null) {
-                parent[name]
-            } else {
-                throw undefined(name)
-            }
+    internal fun getAt(name: Token, metadata: VariableMetadata?): LoxValue = if (metadata != null) {
+        when (val value = ancestor(metadata.depth).values[metadata.index]) {
+            is VariableState.Initialised -> value.value
+            VariableState.Uninitialised -> throw uninitialised(name)
         }
-
-    fun getAt(distance: Int, name: Token): LoxValue = ancestor(distance)[name]
-
-    operator fun set(name: String, value: LoxValue?) {
-        values[name] = if (value != null) {
-            LoxVariable.Initialised(value)
-        } else {
-            LoxVariable.Uninitialised
+    } else {
+        when (val builtin = builtins[name.lexeme]) {
+            null -> throw undefined(name)
+            else -> builtin
         }
     }
 
-    fun assign(name: Token, value: LoxValue) {
-        if (values[name.type.asString] != null) {
-            values[name.type.asString] = LoxVariable.Initialised(value)
-        } else if (parent != null) {
-            parent.assign(name, value)
+    internal fun define(value: LoxValue?) {
+        values.add(if (value != null) {
+            VariableState.Initialised(value)
+        } else {
+            VariableState.Uninitialised
+        })
+    }
+
+    internal fun assignAt(name: Token, value: LoxValue, metadata: VariableMetadata?) = if (metadata != null) {
+        ancestor(metadata.depth).values[metadata.index] = VariableState.Initialised(value)
+    } else {
+        if (builtins[name.lexeme] != null) {
+            throw InterpreterResult.Error(name.line, "Cannot assign to native function `${name.lexeme}`")
         } else {
             throw undefined(name)
         }
     }
 
-    fun assignAt(distance: Int, name: Token, value: LoxValue) = ancestor(distance).assign(name, value)
-
-    private fun ancestor(distance: Int): Environment {
+    private fun ancestor(distance: Int): Scope {
         return (0 until distance).fold(this) { env, _ -> env.parent!! }
     }
 
@@ -317,9 +311,9 @@ class Environment(private val parent: Environment? = null) {
     }
 }
 
-sealed interface LoxVariable {
-    object Uninitialised : LoxVariable
-    data class Initialised(val value: LoxValue) : LoxVariable
+sealed interface VariableState {
+    object Uninitialised : VariableState
+    data class Initialised(val value: LoxValue) : VariableState
 }
 
 sealed interface InterpreterResult {
@@ -328,6 +322,8 @@ sealed interface InterpreterResult {
         override val message: String = "${msg}\n[line ${line}]"
     }
 }
+
+internal data class VariableMetadata(val depth: Int, val index: Int)
 
 private object Break : RuntimeException()
 private class Return(val value: LoxValue) : RuntimeException()

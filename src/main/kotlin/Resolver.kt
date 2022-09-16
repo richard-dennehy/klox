@@ -1,14 +1,10 @@
 import java.util.Stack
 
-fun resolve(interpreter: Interpreter, statements: List<Statement>): ResolveErrors {
-    return Resolver(interpreter).resolve(statements)
-}
-
 data class ResolveErrors(val errors: List<String>)
 
 class Resolver(private val interpreter: Interpreter) {
     private val errors = mutableListOf<String>()
-    private val scopes = Stack<MutableMap<String, VariableState>>()
+    private val scopes = Stack<MutableMap<String, VariableResolution>>().also { it.push(mutableMapOf()) }
     private var currentFunction = FunctionType.None
 
     fun resolve(statements: List<Statement>): ResolveErrors {
@@ -109,7 +105,9 @@ class Resolver(private val interpreter: Interpreter) {
             declare(it.type.asString, it.line)
             define(it.type.asString, it.line)
         }
+        beginScope()
         resolve(body.statements)
+        endScope()
         endScope()
 
         currentFunction = enclosing
@@ -134,7 +132,7 @@ class Resolver(private val interpreter: Interpreter) {
             if (scope.containsKey(name)) {
                 recordError(line, name, "Already a variable with this name in this scope.")
             }
-            scope[name] = VariableState(initialised = false, read = false, index = scope.size, line)
+            scope[name] = VariableResolution(initialised = false, read = false, index = scope.size, line)
         }
     }
 
@@ -144,7 +142,7 @@ class Resolver(private val interpreter: Interpreter) {
             val state = scope[name]
             if (state == null) {
                 recordError(line, name, "Assigning to undeclared variable.")
-                scope[name] = VariableState(initialised = true, read = false, index = scope.size, line)
+                scope[name] = VariableResolution(initialised = true, read = false, index = scope.size, line)
             } else {
                 scope[name] = state.copy(initialised = true)
             }
@@ -171,4 +169,4 @@ enum class FunctionType {
     None,
 }
 
-data class VariableState(val initialised: Boolean, val read: Boolean, val index: Int, val line: Int)
+internal data class VariableResolution(val initialised: Boolean, val read: Boolean, val index: Int, val line: Int)
