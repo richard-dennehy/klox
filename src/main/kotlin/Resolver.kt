@@ -1,13 +1,14 @@
 import java.util.Stack
 
-fun resolve(interpreter: Interpreter, statements: List<Statement>): ResolveErrors =
-    Resolver(interpreter).resolve(statements)
+fun resolve(interpreter: Interpreter, statements: List<Statement>): ResolveErrors {
+    return Resolver(interpreter).resolve(statements)
+}
 
 data class ResolveErrors(val errors: List<String>)
 
 class Resolver(private val interpreter: Interpreter) {
     private val errors = mutableListOf<String>()
-    private val scopes = Stack<MutableMap<String, Boolean>>()
+    private val scopes = Stack<MutableMap<String, VariableState>>()
     private var currentFunction = FunctionType.None
 
     fun resolve(statements: List<Statement>): ResolveErrors {
@@ -27,7 +28,7 @@ class Resolver(private val interpreter: Interpreter) {
             is Statement.ExpressionStatement -> resolve(statement.expression)
             is Statement.Function -> {
                 declare(statement.name.type.asString, statement.sourceLine)
-                define(statement.name.type.asString)
+                define(statement.name.type.asString, statement.sourceLine)
 
                 resolveFunction(statement.parameters, statement.body)
             }
@@ -48,7 +49,7 @@ class Resolver(private val interpreter: Interpreter) {
             is Statement.VarDeclaration -> {
                 declare(statement.name, statement.sourceLine)
                 statement.initialiser?.let(::resolve)
-                define(statement.name)
+                define(statement.name, statement.sourceLine)
             }
 
             is Statement.While -> {
@@ -90,7 +91,7 @@ class Resolver(private val interpreter: Interpreter) {
 
             is Expression.Unary -> resolve(expr.right)
             is Expression.Variable -> {
-                if (scopes.isNotEmpty() && scopes.peek()[expr.name.type.asString] == false) {
+                if (scopes.isNotEmpty() && scopes.peek()[expr.name.type.asString]?.initialised == false) {
                     recordError(expr.name.line, expr.name.type.asString, "Can't read local variable in its own initialiser.")
                 }
 
@@ -106,7 +107,7 @@ class Resolver(private val interpreter: Interpreter) {
         beginScope()
         parameters.forEach {
             declare(it.type.asString, it.line)
-            define(it.type.asString)
+            define(it.type.asString, it.line)
         }
         resolve(body.statements)
         endScope()
@@ -116,9 +117,13 @@ class Resolver(private val interpreter: Interpreter) {
 
     private fun resolveLocal(expr: Expression, name: Token) {
         scopes.withIndex().reversed().forEach { (index, scope) ->
-            if (scope.containsKey(name.type.asString)) {
-                interpreter.resolve(expr, scopes.lastIndex - index)
-                return
+            when (val state = scope[name.type.asString]) {
+                null -> {}
+                else -> {
+                    scope[name.type.asString] = state.copy(read = true)
+                    interpreter.resolve(expr, scopes.lastIndex - index, state.index)
+                    return
+                }
             }
         }
     }
@@ -129,21 +134,35 @@ class Resolver(private val interpreter: Interpreter) {
             if (scope.containsKey(name)) {
                 recordError(line, name, "Already a variable with this name in this scope.")
             }
-            scope[name] = false
+            scope[name] = VariableState(initialised = false, read = false, index = scope.size, line)
         }
     }
 
-    private fun define(name: String) {
+    private fun define(name: String, line: Int) {
         if (scopes.isNotEmpty()) {
-            scopes.peek()[name] = true
+            val scope = scopes.peek()
+            val state = scope[name]
+            if (state == null) {
+                recordError(line, name, "Assigning to undeclared variable.")
+                scope[name] = VariableState(initialised = true, read = false, index = scope.size, line)
+            } else {
+                scope[name] = state.copy(initialised = true)
+            }
         }
     }
 
     private fun beginScope() = scopes.push(mutableMapOf())
-    private fun endScope() = scopes.pop()
+    private fun endScope() {
+        val scope = scopes.pop()
+        scope.forEach {  (key, value) ->
+            if (!value.read) {
+                recordError(value.line, key, "Variable is never used.")
+            }
+        }
+    }
 
     private fun recordError(line: Int, lexeme: String, message: String) {
-        errors.add("[line $line] Error $lexeme: $message")
+        errors.add("[line $line] Error at $lexeme: $message")
     }
 }
 
@@ -151,3 +170,5 @@ enum class FunctionType {
     Function,
     None,
 }
+
+data class VariableState(val initialised: Boolean, val read: Boolean, val index: Int, val line: Int)

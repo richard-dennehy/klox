@@ -103,7 +103,7 @@ thrice(fun (a) {
     fun `passing the wrong number of arguments`() {
         mustFailExecution("fun tooManyArgs() {} tooManyArgs(1, 2, 3);", "Expected 0 arguments but got 3.\n[line 1]")
         mustFailExecution(
-            "fun notEnoughArgs(first, second, third) {} notEnoughArgs(1);", "Expected 3 arguments but got 1.\n[line 1]"
+            "fun notEnoughArgs(first, second, third) { print first; print second; print third; } notEnoughArgs(1);", "Expected 3 arguments but got 1.\n[line 1]"
         )
     }
 

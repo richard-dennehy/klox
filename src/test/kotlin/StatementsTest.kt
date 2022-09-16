@@ -98,11 +98,6 @@ class StatementsTest: InterpreterTest() {
     }
 
     @Test
-    fun `block declared variables are dropped at the block end`() {
-        mustFailExecution("{ var a = 1; } print a;", "Undefined variable `a`.\n[line 1]")
-    }
-
-    @Test
     fun `cannot print uninitialised variable`() {
         mustFailExecution("var uninitialised; print uninitialised;", "Uninitialised variable `uninitialised`\n[line 1]")
     }

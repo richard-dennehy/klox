@@ -14,7 +14,7 @@ class Interpreter(private val io: IO) {
         }
     }
 
-    fun resolve(expr: Expression, depth: Int) {
+    fun resolve(expr: Expression, depth: Int, index: Int) {
         locals[expr] = depth
     }
 
