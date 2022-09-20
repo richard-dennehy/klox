@@ -24,7 +24,7 @@ class Interpreter(private val io: IO) {
             is Statement.Print -> {
                 io.print(
                     when (val result = evaluate(statement.expression, statement.sourceLine)) {
-                        is LoxValue.String -> result.value
+                        is LoxValue.LoxString -> result.value
                         else -> result.asString
                     }
                 )
@@ -44,6 +44,22 @@ class Interpreter(private val io: IO) {
                 } finally {
                     scope = previous
                 }
+            }
+
+            is Statement.ClassDeclaration -> {
+                scope.define(null)
+                val methods = statement.methods.associateBy({ it.name.lexeme },
+                    {
+                        LoxValue.Function(
+                            it.name.lexeme,
+                            it.parameters.size,
+                            scope,
+                            buildFunctionImpl(it.parameters, it.body)
+                        )
+                    })
+                scope.values[scope.values.lastIndex] =
+                    VariableState.Initialised(LoxValue.LoxClass(statement.name.lexeme, methods))
+                statement.name.lexeme
             }
 
             is Statement.If -> if (evaluate(statement.condition, statement.sourceLine).isTruthy) {
@@ -108,9 +124,11 @@ class Interpreter(private val io: IO) {
             is Expression.Variable -> {
                 scope.getAt(expr.name, locals[expr])
             }
+
             is Expression.Assignment -> evaluate(expr.value, sourceLine).also { value ->
                 scope.assignAt(expr.assignee, value, locals[expr])
             }
+
             is Expression.Or -> {
                 val left = evaluate(expr.left, sourceLine)
                 if (left.isTruthy) {
@@ -130,24 +148,55 @@ class Interpreter(private val io: IO) {
             }
 
             is Expression.Call -> {
-                val callee = evaluate(expr.callee, sourceLine)
+                when (val callee = evaluate(expr.callee, sourceLine)) {
+                    is LoxValue.Function -> {
+                        val args = expr.arguments.map { evaluate(it, sourceLine) }
+                        if (args.size != callee.arity) {
+                            throw InterpreterResult.Error(
+                                expr.sourceLine,
+                                "Expected ${callee.arity} arguments but got ${args.size}."
+                            )
+                        }
+                        callee.call(this, callee.closure, args)
+                    }
 
-                if (callee !is LoxValue.Function) {
-                    throw InterpreterResult.Error(expr.sourceLine, "Can only call functions and classes.")
-                }
+                    is LoxValue.LoxClass -> {
+                        callee()
+                    }
 
-                val args = expr.arguments.map { evaluate(it, sourceLine) }
-                if (args.size != callee.arity) {
-                    throw InterpreterResult.Error(
-                        expr.sourceLine,
-                        "Expected ${callee.arity} arguments but got ${args.size}."
-                    )
+                    else -> throw InterpreterResult.Error(expr.sourceLine, "Can only call functions and classes.")
                 }
-                callee.call(this, callee.closure, args)
             }
 
             is Expression.Function -> {
                 LoxValue.Function("[anon]", expr.parameters.size, scope, buildFunctionImpl(expr.parameters, expr.body))
+            }
+
+            is Expression.Get -> {
+                when (val obj = evaluate(expr.obj, expr.name.line)) {
+                    is LoxValue.LoxInstance -> {
+                        obj[expr.name.lexeme] ?: throw InterpreterResult.Error(
+                            expr.name.line,
+                            "Undefined property `${expr.name.lexeme}`."
+                        )
+                    }
+
+                    else ->
+                        throw InterpreterResult.Error(expr.name.line, "Only instances have properties.")
+                }
+            }
+
+            is Expression.Set -> {
+                when (val obj = evaluate(expr.obj, expr.name.line)) {
+                    is LoxValue.LoxInstance -> {
+                        val value = evaluate(expr.value, expr.name.line)
+                        obj[expr.name.lexeme] = value
+                        value
+                    }
+
+                    else ->
+                        throw InterpreterResult.Error(expr.name.line, "Only instances have properties.")
+                }
             }
 
             is Expression.Binary -> {
@@ -184,12 +233,12 @@ class Interpreter(private val io: IO) {
                     }
 
                     TokenType.Plus -> {
-                        if (left is LoxValue.String && right is LoxValue.String) {
-                            LoxValue.String(left.value + right.value)
-                        } else if (left is LoxValue.String) {
-                            LoxValue.String(left.value + right.asString)
-                        } else if (right is LoxValue.String) {
-                            LoxValue.String(left.asString + right.value)
+                        if (left is LoxValue.LoxString && right is LoxValue.LoxString) {
+                            LoxValue.LoxString(left.value + right.value)
+                        } else if (left is LoxValue.LoxString) {
+                            LoxValue.LoxString(left.value + right.asString)
+                        } else if (right is LoxValue.LoxString) {
+                            LoxValue.LoxString(left.asString + right.value)
                         } else if (left is LoxValue.Number) {
                             if (right is LoxValue.Number) {
                                 LoxValue.Number(left.value + right.value)
@@ -266,7 +315,7 @@ class Interpreter(private val io: IO) {
 }
 
 class Scope(internal val builtins: MutableMap<String, LoxValue>, private val parent: Scope? = null) {
-    private val values: MutableList<VariableState> = mutableListOf()
+    internal val values: MutableList<VariableState> = mutableListOf()
 
     internal fun getAt(name: Token, metadata: VariableMetadata?): LoxValue = if (metadata != null) {
         when (val value = ancestor(metadata.depth).values[metadata.index]) {
@@ -281,11 +330,13 @@ class Scope(internal val builtins: MutableMap<String, LoxValue>, private val par
     }
 
     internal fun define(value: LoxValue?) {
-        values.add(if (value != null) {
-            VariableState.Initialised(value)
-        } else {
-            VariableState.Uninitialised
-        })
+        values.add(
+            if (value != null) {
+                VariableState.Initialised(value)
+            } else {
+                VariableState.Uninitialised
+            }
+        )
     }
 
     internal fun assignAt(name: Token, value: LoxValue, metadata: VariableMetadata?) = if (metadata != null) {

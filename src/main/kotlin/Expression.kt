@@ -15,6 +15,8 @@ sealed interface Expression {
     class Or(val left: Expression, val right: Expression) : Expression
     class Call(val callee: Expression, val arguments: List<Expression>, val sourceLine: Int): Expression
     class Function(val parameters: List<Token>, val body: Statement.Block): Expression
+    class Get(val obj: Expression, val name: Token): Expression
+    class Set(val obj: Expression, val name: Token, val value: Expression): Expression
 }
 
 sealed interface Statement {
@@ -37,4 +39,7 @@ sealed interface Statement {
         override val sourceLine = name.line
     }
     data class Return(val value: Expression?, override val sourceLine: Int): Statement
+    data class ClassDeclaration(val name: Token, val methods: List<Function>): Statement {
+        override val sourceLine = name.line
+    }
 }

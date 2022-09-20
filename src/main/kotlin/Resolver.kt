@@ -21,12 +21,18 @@ class Resolver(private val interpreter: Interpreter) {
             }
 
             is Statement.Break -> {}
+            is Statement.ClassDeclaration -> {
+                declare(statement.name.lexeme, statement.sourceLine)
+                define(statement.name.lexeme, statement.sourceLine)
+
+                statement.methods.forEach { resolveFunction(it.parameters, it.body, FunctionType.Method) }
+            }
             is Statement.ExpressionStatement -> resolve(statement.expression)
             is Statement.Function -> {
                 declare(statement.name.type.asString, statement.sourceLine)
                 define(statement.name.type.asString, statement.sourceLine)
 
-                resolveFunction(statement.parameters, statement.body)
+                resolveFunction(statement.parameters, statement.body, FunctionType.Function)
             }
 
             is Statement.If -> {
@@ -77,7 +83,8 @@ class Resolver(private val interpreter: Interpreter) {
                 expr.arguments.forEach(::resolve)
             }
 
-            is Expression.Function -> resolveFunction(expr.parameters, expr.body)
+            is Expression.Function -> resolveFunction(expr.parameters, expr.body, FunctionType.Function)
+            is Expression.Get -> resolve(expr.obj)
             is Expression.Grouping -> resolve(expr.expression)
             is Expression.Literal -> {}
             is Expression.Or -> {
@@ -85,6 +92,10 @@ class Resolver(private val interpreter: Interpreter) {
                 resolve(expr.right)
             }
 
+            is Expression.Set -> {
+               resolve(expr.value)
+               resolve(expr.obj)
+            }
             is Expression.Unary -> resolve(expr.right)
             is Expression.Variable -> {
                 if (scopes.isNotEmpty() && scopes.peek()[expr.name.type.asString]?.initialised == false) {
@@ -96,9 +107,9 @@ class Resolver(private val interpreter: Interpreter) {
         }
     }
 
-    private fun resolveFunction(parameters: List<Token>, body: Statement.Block) {
+    private fun resolveFunction(parameters: List<Token>, body: Statement.Block, kind: FunctionType) {
         val enclosing = currentFunction
-        currentFunction = FunctionType.Function
+        currentFunction = kind
 
         beginScope()
         parameters.forEach {
@@ -166,6 +177,7 @@ class Resolver(private val interpreter: Interpreter) {
 
 enum class FunctionType {
     Function,
+    Method,
     None,
 }
 

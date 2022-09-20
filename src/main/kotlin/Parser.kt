@@ -24,8 +24,9 @@ private class Parser(private val tokens: List<Token>) {
 
     private fun declaration(breakable: Boolean): Statement? {
         return try {
-            val token = match(TokenType.Keyword.Fun, TokenType.Keyword.Var)
+            val token = match(TokenType.Keyword.Class, TokenType.Keyword.Fun, TokenType.Keyword.Var)
             when (token?.type) {
+                TokenType.Keyword.Class -> classDeclaration()
                 TokenType.Keyword.Fun -> namedFunction("function")
                 TokenType.Keyword.Var -> varDeclaration(token.line)
                 else -> statement(breakable)
@@ -176,6 +177,24 @@ private class Parser(private val tokens: List<Token>) {
         return Statement.ExpressionStatement(expr, sourceLine)
     }
 
+    private fun classDeclaration(): Statement.ClassDeclaration {
+        val name = if (peek()?.type is TokenType.Identifier) {
+            advance()!!
+        } else {
+            parseError("Expect class name.")
+        }
+        consume(TokenType.LeftBrace, "Expect '{' before class body.")
+
+        val methods = mutableListOf<Statement.Function>()
+        while (moreTokens() && !check(TokenType.RightBrace)) {
+            methods.add(namedFunction("method"))
+        }
+
+        consume(TokenType.RightBrace, "Expect '}' after class body.")
+
+        return Statement.ClassDeclaration(name, methods)
+    }
+
     // TODO could probably simplify this to rewrite all expressions `fun name(args) {...}` to `var name = fun (args) {...}` but need to implement class methods first
     private fun namedFunction(kind: String): Statement.Function {
         val name = if (peek()?.type is TokenType.Identifier) {
@@ -226,6 +245,10 @@ private class Parser(private val tokens: List<Token>) {
 
             if (expression is Expression.Variable) {
                 return Expression.Assignment(expression.name, value)
+            }
+
+            if (expression is Expression.Get) {
+                return Expression.Set(expression.obj, expression.name, value)
             }
 
             errors.recordError("Invalid assignment target.", equals.line, " at ${equals.type.asString}")
@@ -289,10 +312,16 @@ private class Parser(private val tokens: List<Token>) {
     private fun call(): Expression {
         var expression = primary()
 
-        // apparently there's good reason for this weirdness
         while (true) {
-            if (match(TokenType.LeftParenthesis) != null) {
-                expression = finishCall(expression)
+            expression = if (match(TokenType.LeftParenthesis) != null) {
+                finishCall(expression)
+            } else if (match(TokenType.Dot) != null) {
+                val name = if (peek()?.type is TokenType.Identifier) {
+                    advance()!!
+                } else {
+                    parseError("Expect property name after '.'.")
+                }
+                Expression.Get(expression, name)
             } else {
                 break
             }

@@ -1,4 +1,4 @@
-sealed class LoxValue(val asString: kotlin.String) {
+sealed class LoxValue(val asString: String) {
     open val isTruthy: Boolean = true
 
     object Nil : LoxValue("nil") {
@@ -10,9 +10,18 @@ sealed class LoxValue(val asString: kotlin.String) {
         override val isTruthy: Boolean = false
     }
 
-    data class String(val value: kotlin.String) : LoxValue("\"$value\"")
+    data class LoxString(val value: String) : LoxValue("\"$value\"")
     data class Number(val value: Double) : LoxValue(value.toString().removeSuffix(".0"))
-    class Function(name: kotlin.String, val arity: Int, val closure: Scope, val call: (Interpreter, Scope, List<LoxValue>) -> LoxValue): LoxValue("fn <$name>")
+    class Function(name: String, val arity: Int, val closure: Scope, val call: (Interpreter, Scope, List<LoxValue>) -> LoxValue): LoxValue("fn <$name>")
+    class LoxClass(name: String, val methods: Map<String, Function>): LoxValue(name) {
+        operator fun invoke(): LoxInstance = LoxInstance(this, mutableMapOf())
+    }
+    class LoxInstance(private val klass: LoxClass, private val fields: MutableMap<String, LoxValue>): LoxValue(klass.asString + " instance") {
+        operator fun get(name: String): LoxValue? = fields[name] ?: klass.methods[name]
+        operator fun set(name: String, value: LoxValue) {
+            fields[name] = value
+        }
+    }
 
     companion object {
         fun from(value: Boolean): LoxValue = if (value) {
@@ -26,7 +35,7 @@ sealed class LoxValue(val asString: kotlin.String) {
             TokenType.KeywordLiteral.Nil -> Nil
             TokenType.KeywordLiteral.True -> True
             is TokenType.LoxNumber -> Number(literal.asDouble)
-            is TokenType.LoxString -> String(literal.asString)
+            is TokenType.LoxString -> LoxString(literal.asString)
         }
     }
 }
