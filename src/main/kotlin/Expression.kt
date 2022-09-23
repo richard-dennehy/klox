@@ -17,6 +17,7 @@ sealed interface Expression {
     class Function(val parameters: List<Token>, val body: Statement.Block): Expression
     class Get(val obj: Expression, val name: Token): Expression
     class Set(val obj: Expression, val name: Token, val value: Expression): Expression
+    class This(val token: Token): Expression
 }
 
 sealed interface Statement {

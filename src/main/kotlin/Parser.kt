@@ -370,6 +370,10 @@ private class Parser(private val tokens: List<Token>) {
             return Expression.Grouping(grouped)
         }
 
+        if (next.type == TokenType.Keyword.This) {
+            return Expression.This(advance()!!)
+        }
+
         if (next.type is TokenType.Identifier) {
             advance()
             return Expression.Variable(next)

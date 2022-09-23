@@ -199,6 +199,10 @@ class Interpreter(private val io: IO) {
                 }
             }
 
+            is Expression.This -> {
+                scope.getAt(expr.token, locals[expr])
+            }
+
             is Expression.Binary -> {
                 val left = evaluate(expr.left, sourceLine)
                 val right = evaluate(expr.right, sourceLine)

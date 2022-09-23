@@ -12,12 +12,24 @@ sealed class LoxValue(val asString: String) {
 
     data class LoxString(val value: String) : LoxValue("\"$value\"")
     data class Number(val value: Double) : LoxValue(value.toString().removeSuffix(".0"))
-    class Function(name: String, val arity: Int, val closure: Scope, val call: (Interpreter, Scope, List<LoxValue>) -> LoxValue): LoxValue("fn <$name>")
+    class Function(internal val name: String, val arity: Int, val closure: Scope, val call: (Interpreter, Scope, List<LoxValue>) -> LoxValue): LoxValue("fn <$name>")
     class LoxClass(name: String, val methods: Map<String, Function>): LoxValue(name) {
         operator fun invoke(): LoxInstance = LoxInstance(this, mutableMapOf())
     }
     class LoxInstance(private val klass: LoxClass, private val fields: MutableMap<String, LoxValue>): LoxValue(klass.asString + " instance") {
-        operator fun get(name: String): LoxValue? = fields[name] ?: klass.methods[name]
+        operator fun get(name: String): LoxValue? {
+            val field = fields[name]
+            if (field != null) return field
+
+            val method = klass.methods[name]
+            if (method != null) {
+                val scope = Scope(method.closure.builtins, method.closure)
+                scope.define(this)
+                return Function(method.name, method.arity, scope, method.call)
+            }
+
+            return null
+        }
         operator fun set(name: String, value: LoxValue) {
             fields[name] = value
         }

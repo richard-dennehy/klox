@@ -6,6 +6,7 @@ class Resolver(private val interpreter: Interpreter) {
     private val errors = mutableListOf<String>()
     private val scopes = Stack<MutableMap<String, VariableResolution>>().also { it.push(mutableMapOf()) }
     private var currentFunction = FunctionType.None
+    private var currentClass = ClassType.None
 
     fun resolve(statements: List<Statement>): ResolveErrors {
         statements.forEach(::resolve)
@@ -22,10 +23,17 @@ class Resolver(private val interpreter: Interpreter) {
 
             is Statement.Break -> {}
             is Statement.ClassDeclaration -> {
+                val enclosingClass = currentClass
+                currentClass = ClassType.Class
                 declare(statement.name.lexeme, statement.sourceLine)
                 define(statement.name.lexeme, statement.sourceLine)
 
+                beginScope()
+                scopes.peek()["this"] =
+                    VariableResolution(initialised = true, read = true, index = 0, line = statement.sourceLine)
                 statement.methods.forEach { resolveFunction(it.parameters, it.body, FunctionType.Method) }
+                endScope()
+                currentClass = enclosingClass
             }
             is Statement.ExpressionStatement -> resolve(statement.expression)
             is Statement.Function -> {
@@ -95,6 +103,13 @@ class Resolver(private val interpreter: Interpreter) {
             is Expression.Set -> {
                resolve(expr.value)
                resolve(expr.obj)
+            }
+            is Expression.This -> {
+                if (currentClass != ClassType.None) {
+                    resolveLocal(expr, expr.token)
+                } else {
+                    recordError(expr.token.line, expr.token.lexeme, "Can't use 'this' outside of a class.")
+                }
             }
             is Expression.Unary -> resolve(expr.right)
             is Expression.Variable -> {
@@ -178,6 +193,11 @@ class Resolver(private val interpreter: Interpreter) {
 enum class FunctionType {
     Function,
     Method,
+    None,
+}
+
+enum class ClassType {
+    Class,
     None,
 }
 
