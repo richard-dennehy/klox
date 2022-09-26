@@ -31,7 +31,8 @@ class Resolver(private val interpreter: Interpreter) {
                 beginScope()
                 scopes.peek()["this"] =
                     VariableResolution(initialised = true, read = true, index = 0, line = statement.sourceLine)
-                statement.methods.forEach { resolveFunction(it.parameters, it.body, FunctionType.Method) }
+                val functionType = if (statement.name.lexeme == "init") FunctionType.Initialiser else FunctionType.Method
+                statement.methods.forEach { resolveFunction(it.parameters, it.body, functionType) }
                 endScope()
                 currentClass = enclosingClass
             }
@@ -54,7 +55,13 @@ class Resolver(private val interpreter: Interpreter) {
                 if (currentFunction == FunctionType.None) {
                     recordError(statement.sourceLine, "return", "Can't return from top-level code.")
                 }
-                statement.value?.let(::resolve)
+                if (statement.value != null) {
+                    if (currentFunction == FunctionType.Initialiser) {
+                        recordError(statement.sourceLine, "return", "Can't return a value from an initialiser.")
+                    }
+
+                    resolve(statement.value)
+                }
             }
             is Statement.VarDeclaration -> {
                 declare(statement.name, statement.sourceLine)
@@ -193,6 +200,7 @@ class Resolver(private val interpreter: Interpreter) {
 enum class FunctionType {
     Function,
     Method,
+    Initialiser,
     None,
 }
 

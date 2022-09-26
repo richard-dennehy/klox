@@ -54,7 +54,7 @@ class Interpreter(private val io: IO) {
                             it.name.lexeme,
                             it.parameters.size,
                             scope,
-                            buildFunctionImpl(it.parameters, it.body)
+                            buildFunctionImpl(it.parameters, it.body, it.name.lexeme == "init")
                         )
                     })
                 scope.values[scope.values.lastIndex] =
@@ -81,7 +81,7 @@ class Interpreter(private val io: IO) {
             is Statement.Function -> {
                 val function = LoxValue.Function(
                     statement.name.type.asString, statement.parameters.size, scope,
-                    buildFunctionImpl(statement.parameters, statement.body)
+                    buildFunctionImpl(statement.parameters, statement.body, false)
                 )
                 scope.define(function)
                 ""
@@ -161,7 +161,14 @@ class Interpreter(private val io: IO) {
                     }
 
                     is LoxValue.LoxClass -> {
-                        callee()
+                        val args = expr.arguments.map { evaluate(it, sourceLine) }
+                        if (args.size != callee.arity) {
+                            throw InterpreterResult.Error(
+                                expr.sourceLine,
+                                "Expected ${callee.arity} arguments but got ${args.size}."
+                            )
+                        }
+                        callee(this, args)
                     }
 
                     else -> throw InterpreterResult.Error(expr.sourceLine, "Can only call functions and classes.")
@@ -169,7 +176,7 @@ class Interpreter(private val io: IO) {
             }
 
             is Expression.Function -> {
-                LoxValue.Function("[anon]", expr.parameters.size, scope, buildFunctionImpl(expr.parameters, expr.body))
+                LoxValue.Function("[anon]", expr.parameters.size, scope, buildFunctionImpl(expr.parameters, expr.body, false))
             }
 
             is Expression.Get -> {
@@ -297,7 +304,8 @@ class Interpreter(private val io: IO) {
 
     private fun buildFunctionImpl(
         parameters: List<Token>,
-        body: Statement.Block
+        body: Statement.Block,
+        isInitialiser: Boolean,
     ): (Interpreter, Scope, List<LoxValue>) -> LoxValue = { interpreter, closure, arguments ->
         var returnValue: LoxValue = LoxValue.Nil
 
@@ -314,7 +322,14 @@ class Interpreter(private val io: IO) {
             interpreter.scope = previous
         }
 
-        returnValue
+        if (isInitialiser) {
+            when (val self = closure.values[0]) {
+                is VariableState.Initialised -> self.value
+                else -> throw java.lang.RuntimeException("`this` is undefined in class initialiser")
+            }
+        } else {
+            returnValue
+        }
     }
 }
 
