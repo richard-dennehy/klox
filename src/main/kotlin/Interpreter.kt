@@ -325,7 +325,7 @@ class Interpreter(private val io: IO) {
         if (isInitialiser) {
             when (val self = closure.values[0]) {
                 is VariableState.Initialised -> self.value
-                else -> throw java.lang.RuntimeException("`this` is undefined in class initialiser")
+                else -> throw java.lang.RuntimeException("`this` should never be undefined in class initialiser")
             }
         } else {
             returnValue

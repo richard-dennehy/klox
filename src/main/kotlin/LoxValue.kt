@@ -29,7 +29,8 @@ sealed class LoxValue(val asString: String) {
         operator fun invoke(interpreter: Interpreter, arguments: List<LoxValue>): LoxInstance {
             val instance = LoxInstance(this, mutableMapOf())
             val initialiser = methods["init"]
-            initialiser?.bind(instance)?.call?.invoke(interpreter, initialiser.closure, arguments)
+            val bound = initialiser?.bind(instance)
+            bound?.call?.invoke(interpreter, bound.closure, arguments)
             return instance
         }
 

@@ -31,11 +31,14 @@ class Resolver(private val interpreter: Interpreter) {
                 beginScope()
                 scopes.peek()["this"] =
                     VariableResolution(initialised = true, read = true, index = 0, line = statement.sourceLine)
-                val functionType = if (statement.name.lexeme == "init") FunctionType.Initialiser else FunctionType.Method
-                statement.methods.forEach { resolveFunction(it.parameters, it.body, functionType) }
+                statement.methods.forEach {
+                    val functionType = if (it.name.lexeme == "init") FunctionType.Initialiser else FunctionType.Method
+                    resolveFunction(it.parameters, it.body, functionType)
+                }
                 endScope()
                 currentClass = enclosingClass
             }
+
             is Statement.ExpressionStatement -> resolve(statement.expression)
             is Statement.Function -> {
                 declare(statement.name.type.asString, statement.sourceLine)
@@ -63,6 +66,7 @@ class Resolver(private val interpreter: Interpreter) {
                     resolve(statement.value)
                 }
             }
+
             is Statement.VarDeclaration -> {
                 declare(statement.name, statement.sourceLine)
                 statement.initialiser?.let(::resolve)
@@ -108,9 +112,10 @@ class Resolver(private val interpreter: Interpreter) {
             }
 
             is Expression.Set -> {
-               resolve(expr.value)
-               resolve(expr.obj)
+                resolve(expr.value)
+                resolve(expr.obj)
             }
+
             is Expression.This -> {
                 if (currentClass != ClassType.None) {
                     resolveLocal(expr, expr.token)
@@ -118,10 +123,15 @@ class Resolver(private val interpreter: Interpreter) {
                     recordError(expr.token.line, expr.token.lexeme, "Can't use 'this' outside of a class.")
                 }
             }
+
             is Expression.Unary -> resolve(expr.right)
             is Expression.Variable -> {
                 if (scopes.isNotEmpty() && scopes.peek()[expr.name.type.asString]?.initialised == false) {
-                    recordError(expr.name.line, expr.name.type.asString, "Can't read local variable in its own initialiser.")
+                    recordError(
+                        expr.name.line,
+                        expr.name.type.asString,
+                        "Can't read local variable in its own initialiser."
+                    )
                 }
 
                 resolveLocal(expr, expr.name)
@@ -185,7 +195,7 @@ class Resolver(private val interpreter: Interpreter) {
     private fun beginScope() = scopes.push(mutableMapOf())
     private fun endScope() {
         val scope = scopes.pop()
-        scope.forEach {  (key, value) ->
+        scope.forEach { (key, value) ->
             if (!value.read) {
                 recordError(value.line, key, "Variable is never used.")
             }
