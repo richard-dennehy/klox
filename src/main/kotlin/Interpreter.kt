@@ -48,7 +48,10 @@ class Interpreter(private val io: IO) {
 
             is Statement.ClassDeclaration -> {
                 scope.define(null)
-                val methods = statement.methods.associateBy({ it.name.lexeme },
+                val classMethods = statement.classMethods.associateBy( { it.name.lexeme }, {
+                    LoxValue.Function(it.name.lexeme, it.parameters.size, scope, buildFunctionImpl(it.parameters, it.body, false))
+                })
+                val methods = statement.instanceMethods.associateBy({ it.name.lexeme },
                     {
                         LoxValue.Function(
                             it.name.lexeme,
@@ -58,7 +61,7 @@ class Interpreter(private val io: IO) {
                         )
                     })
                 scope.values[scope.values.lastIndex] =
-                    VariableState.Initialised(LoxValue.LoxClass(statement.name.lexeme, methods))
+                    VariableState.Initialised(LoxValue.LoxClass(statement.name.lexeme, methods, classMethods))
                 statement.name.lexeme
             }
 
@@ -183,6 +186,12 @@ class Interpreter(private val io: IO) {
                 when (val obj = evaluate(expr.obj, expr.name.line)) {
                     is LoxValue.LoxInstance -> {
                         obj[expr.name.lexeme] ?: throw InterpreterResult.Error(
+                            expr.name.line,
+                            "Undefined property `${expr.name.lexeme}`."
+                        )
+                    }
+                    is LoxValue.LoxClass -> {
+                        obj.classMethods[expr.name.lexeme] ?: throw InterpreterResult.Error(
                             expr.name.line,
                             "Undefined property `${expr.name.lexeme}`."
                         )

@@ -132,6 +132,24 @@ cake.taste();
     }
 
     @Test
+    fun `calling a method from another method`() {
+        val source = """
+            class Thing {
+              a() {
+                return this.b();
+              }
+              
+              b() {
+                return 1;
+              }
+            }
+            
+            Thing().a();
+        """.trimIndent()
+        mustEvaluateTo(source, "1")
+    }
+
+    @Test
     fun `defining a custom constructor using init`() {
         val source = """
             class Cake {
@@ -181,6 +199,89 @@ cake.taste();
             Stuff(true);
         """.trimIndent()
         mustEvaluateTo(source, "Stuff instance")
+    }
+
+    @Test
+    fun `assigning a field with the same name as instance method`() {
+        val source = """
+            class Stuff {
+              method() {
+                return 1;
+              }
+            }
+            
+            var s = Stuff();
+            s.method = fun () { return 2; };
+            s.method();
+        """.trimIndent()
+        mustEvaluateTo(source, "2")
+    }
+
+    @Test
+    fun `static class methods`() {
+        val source = """
+            class Maths {
+              class square(n) { return n * n; }
+            }
+            Maths.square(3);
+        """.trimIndent()
+        mustEvaluateTo(source, "9")
+    }
+
+    @Test
+    fun `calling a static method from another static method`() {
+        val source = """
+            class Maths {
+              class square(n) { return n * n; }
+              class cube(n) { return Maths.square(n) * n; }
+            }
+            Maths.cube(3);
+        """.trimIndent()
+        mustEvaluateTo(source, "27")
+    }
+
+    @Test
+    fun `calling a static method from an instance method`() {
+        val source = """
+            class Stuff {
+              class a() { return 1; }
+              a() { return Stuff.a(); }
+            }
+            Stuff().a();
+        """.trimIndent()
+        mustEvaluateTo(source, "1")
+    }
+
+    @Test
+    fun `defining a class method and instance method with the same name`() {
+        val source = """
+            class Stuff {
+              class a() { return "static call "; }
+              a() { return "instance call"; }
+            }
+            Stuff.a() + Stuff().a();
+        """.trimIndent()
+        mustEvaluateTo(source, "\"static call instance call\"")
+    }
+
+    @Test
+    fun `referring to a class within its definition`() {
+        val source = """
+            class Counted {
+              init() {
+                this.counter = 0;
+              }
+              
+              clone() {
+                var clone = Counted();
+                clone.counter = clone.counter + this.counter + 1;
+                return clone;
+              }
+            }
+            
+            Counted().clone().clone().clone().counter;
+        """.trimIndent()
+        mustEvaluateTo(source, "3")
     }
 
     @Test
@@ -245,5 +346,90 @@ cake.taste();
             Thing();
         """.trimIndent()
         mustFailResolving(source, "[line 3] Error at return: Can't return a value from an initialiser.")
+    }
+
+    @Test
+    fun `accessing a non-existent class property`() {
+        val source = """
+            class Thing {}
+            Thing().doesntExist;
+        """.trimIndent()
+        mustFailExecution(source, "Undefined property `doesntExist`.\n[line 2]")
+    }
+
+    @Test
+    fun `accessing a non-existent instance method`() {
+        val source = """
+            class Thing {}
+            Thing().stillDoesntExist();
+        """.trimIndent()
+        mustFailExecution(source, "Undefined property `stillDoesntExist`.\n[line 2]")
+    }
+
+    @Test
+    fun `accessing a non-existent class method`() {
+        val source = """
+            class Thing {}
+            Thing.nope();
+        """.trimIndent()
+        mustFailExecution(source, "Undefined property `nope`.\n[line 2]")
+    }
+
+    @Test
+    fun `accessing an instance method as a class method`() {
+        val source = """
+            class Thing {
+              nope() { return "hi"; }
+            }
+            Thing.nope();
+        """.trimIndent()
+        mustFailExecution(source, "Undefined property `nope`.\n[line 4]")
+    }
+
+    @Test
+    fun `calling a method from another method without using this`() {
+        val source = """
+            class Thing {
+              a() {
+                return b();
+              }
+              
+              b() {
+                return 1;
+              }
+            }
+            
+            Thing().a();
+        """.trimIndent()
+        mustFailExecution(source, "Undefined variable `b`.\n[line 3]")
+    }
+
+    @Test
+    fun `using this in class method`() {
+        val source = """
+            class Stuff {
+              class a() {
+                return this.isNotAllowed;
+              }
+            }
+            Stuff.a();
+        """.trimIndent()
+        mustFailResolving(source, "[line 3] Error at this: Can't use 'this' in static class method.")
+    }
+
+    @Test
+    fun `using this in local function in class method`() {
+        val source = """
+            class Stuff {
+              class a() {
+                fun inner() {
+                  return this.isStillNotAllowed;
+                }
+                return inner();
+              }
+            }
+            Stuff.a();
+        """.trimIndent()
+        mustFailResolving(source, "[line 4] Error at this: Can't use 'this' in static class method.")
     }
 }

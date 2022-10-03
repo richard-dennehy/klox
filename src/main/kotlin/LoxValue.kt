@@ -25,16 +25,16 @@ sealed class LoxValue(val asString: String) {
         }
     }
 
-    class LoxClass(name: String, val methods: Map<String, Function>) : LoxValue(name) {
+    class LoxClass(name: String, internal val instanceMethods: Map<String, Function>, val classMethods: Map<String, Function>) : LoxValue(name) {
         operator fun invoke(interpreter: Interpreter, arguments: List<LoxValue>): LoxInstance {
             val instance = LoxInstance(this, mutableMapOf())
-            val initialiser = methods["init"]
+            val initialiser = instanceMethods["init"]
             val bound = initialiser?.bind(instance)
             bound?.call?.invoke(interpreter, bound.closure, arguments)
             return instance
         }
 
-        val arity = methods["init"]?.arity ?: 0
+        val arity = instanceMethods["init"]?.arity ?: 0
     }
 
     class LoxInstance(private val klass: LoxClass, private val fields: MutableMap<String, LoxValue>) :
@@ -43,7 +43,7 @@ sealed class LoxValue(val asString: String) {
             val field = fields[name]
             if (field != null) return field
 
-            val method = klass.methods[name]
+            val method = klass.instanceMethods[name]
             return method?.bind(this)
         }
 

@@ -40,7 +40,7 @@ sealed interface Statement {
         override val sourceLine = name.line
     }
     data class Return(val value: Expression?, override val sourceLine: Int): Statement
-    data class ClassDeclaration(val name: Token, val methods: List<Function>): Statement {
+    data class ClassDeclaration(val name: Token, val instanceMethods: List<Function>, val classMethods: List<Function>): Statement {
         override val sourceLine = name.line
     }
 }

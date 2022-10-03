@@ -185,14 +185,20 @@ private class Parser(private val tokens: List<Token>) {
         }
         consume(TokenType.LeftBrace, "Expect '{' before class body.")
 
-        val methods = mutableListOf<Statement.Function>()
+        val instanceMethods = mutableListOf<Statement.Function>()
+        val classMethods = mutableListOf<Statement.Function>()
         while (moreTokens() && !check(TokenType.RightBrace)) {
-            methods.add(namedFunction("method"))
+            if (check(TokenType.Keyword.Class)) {
+                advance()
+                classMethods.add(namedFunction("static method"))
+            } else {
+                instanceMethods.add(namedFunction("method"))
+            }
         }
 
         consume(TokenType.RightBrace, "Expect '}' after class body.")
 
-        return Statement.ClassDeclaration(name, methods)
+        return Statement.ClassDeclaration(name, instanceMethods, classMethods)
     }
 
     // TODO could probably simplify this to rewrite all expressions `fun name(args) {...}` to `var name = fun (args) {...}` but need to implement class methods first

@@ -24,14 +24,19 @@ class Resolver(private val interpreter: Interpreter) {
             is Statement.Break -> {}
             is Statement.ClassDeclaration -> {
                 val enclosingClass = currentClass
-                currentClass = ClassType.Class
                 declare(statement.name.lexeme, statement.sourceLine)
                 define(statement.name.lexeme, statement.sourceLine)
 
+                currentClass = ClassType.Static
+                statement.classMethods.forEach {
+                    resolveFunction(it.parameters, it.body, FunctionType.Function)
+                }
+
+                currentClass = ClassType.Class
                 beginScope()
                 scopes.peek()["this"] =
                     VariableResolution(initialised = true, read = true, index = 0, line = statement.sourceLine)
-                statement.methods.forEach {
+                statement.instanceMethods.forEach {
                     val functionType = if (it.name.lexeme == "init") FunctionType.Initialiser else FunctionType.Method
                     resolveFunction(it.parameters, it.body, functionType)
                 }
@@ -117,10 +122,15 @@ class Resolver(private val interpreter: Interpreter) {
             }
 
             is Expression.This -> {
-                if (currentClass != ClassType.None) {
-                    resolveLocal(expr, expr.token)
-                } else {
-                    recordError(expr.token.line, expr.token.lexeme, "Can't use 'this' outside of a class.")
+                when (currentClass) {
+                    ClassType.Class ->
+                        resolveLocal(expr, expr.token)
+
+                    ClassType.Static ->
+                        recordError(expr.token.line, expr.token.lexeme, "Can't use 'this' in static class method.")
+
+                    ClassType.None ->
+                        recordError(expr.token.line, expr.token.lexeme, "Can't use 'this' outside of a class.")
                 }
             }
 
@@ -216,6 +226,7 @@ enum class FunctionType {
 
 enum class ClassType {
     Class,
+    Static,
     None,
 }
 
