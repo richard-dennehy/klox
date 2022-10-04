@@ -285,6 +285,25 @@ cake.taste();
     }
 
     @Test
+    fun getter() {
+        val source = """
+            class Circle {
+              init(radius) {
+                this.radius = radius;
+              }
+
+              area {
+                return 3.141592653 * this.radius * this.radius;
+              }
+            }
+
+            var circle = Circle(4);
+            circle.area;
+        """.trimIndent()
+        mustEvaluateTo(source, "50.265482448")
+    }
+
+    @Test
     fun `passing arguments to default class constructor`() {
         val source = """
             class Thing {}
@@ -322,7 +341,7 @@ cake.taste();
     @Test
     fun `using this in a top level statement`() {
         val source = "print this;"
-        mustFailResolving(source, "[line 1] Error at this: Can't use 'this' outside of a class.")
+        mustFailResolving(source, "[line 1] Error at `this`: Can't use 'this' outside of a class.")
     }
 
     @Test
@@ -332,7 +351,7 @@ cake.taste();
               print this;
             }
         """.trimIndent()
-        mustFailResolving(source, "[line 2] Error at this: Can't use 'this' outside of a class.")
+        mustFailResolving(source, "[line 2] Error at `this`: Can't use 'this' outside of a class.")
     }
 
     @Test
@@ -345,7 +364,7 @@ cake.taste();
             }
             Thing();
         """.trimIndent()
-        mustFailResolving(source, "[line 3] Error at return: Can't return a value from an initialiser.")
+        mustFailResolving(source, "[line 3] Error at `return`: Can't return a value from an initialiser.")
     }
 
     @Test
@@ -414,7 +433,7 @@ cake.taste();
             }
             Stuff.a();
         """.trimIndent()
-        mustFailResolving(source, "[line 3] Error at this: Can't use 'this' in static class method.")
+        mustFailResolving(source, "[line 3] Error at `this`: Can't use 'this' in static class method.")
     }
 
     @Test
@@ -430,6 +449,80 @@ cake.taste();
             }
             Stuff.a();
         """.trimIndent()
-        mustFailResolving(source, "[line 4] Error at this: Can't use 'this' in static class method.")
+        mustFailResolving(source, "[line 4] Error at `this`: Can't use 'this' in static class method.")
+    }
+
+    @Test
+    fun `defining a getter outside a class`() {
+        val source = """
+            fun notAllowed {
+                return 1;
+            }
+        """.trimIndent()
+        mustFailResolving(source, "[line 1] Error at `{`: Only methods can be getters.")
+    }
+
+    @Test
+    fun `defining init method as a getter`() {
+        val source = """
+            class Bad {
+                init {
+                    this.isNotAllowed = 1;
+                }
+            }
+        """.trimIndent()
+        mustFailResolving(source, "[line 2] Error at `{`: Only methods can be getters.")
+    }
+
+    @Test
+    fun `defining a getter inside a method`() {
+        val source = """
+            class Bad {
+                bad() {
+                    fun value {
+                        return 1;
+                    }
+                    
+                    value;
+                }
+            }
+        """.trimIndent()
+        mustFailResolving(source, "[line 3] Error at `{`: Only methods can be getters.")
+    }
+
+    @Test
+    fun `defining a getter inside another getter`() {
+        val source = """
+            class Bad {
+                bad {
+                    fun value {
+                        return 1;
+                    }
+                    
+                    value;
+                }
+            }
+        """.trimIndent()
+        mustFailResolving(source, "[line 3] Error at `{`: Only methods can be getters.")
+    }
+
+    @Test
+    fun `defining a getter as a static class method`() {
+        val source = """
+            class Bad {
+                class bad {
+                    return 1;
+                }
+            }
+        """.trimIndent()
+        mustFailResolving(source, "[line 2] Error at `{`: Only methods can be getters.")
+    }
+
+    @Test
+    fun `defining an anonymous getter`() {
+        val source = """
+            var notAllowed = fun { return 1; };
+        """.trimIndent()
+        mustFailParsing(source, "[line 1] Error at ';': Cannot define a getter as an expression.")
     }
 }

@@ -209,33 +209,38 @@ private class Parser(private val tokens: List<Token>) {
             parseError("Expect $kind name.")
         }
 
-        val (parameters, body) = function(name.line, kind)
+        val (parameters, body, getter) = function(name.line, kind)
 
-        return Statement.Function(name, parameters, body)
+        return Statement.Function(name, parameters, body, getter)
     }
 
-    private fun function(sourceLine: Int, kind: String): Pair<List<Token>, Statement.Block> {
-        consume(TokenType.LeftParenthesis, "Expect '(' after $kind name.")
-        val parameters = mutableListOf<Token>()
-        if (!check(TokenType.RightParenthesis)) {
-            do {
-                if (parameters.size >= 255) {
-                    errors.recordError(peek() ?: tokens.last(), "Can't have more than 255 parameters.")
-                }
+    private fun function(sourceLine: Int, kind: String): Triple<List<Token>, Statement.Block, Boolean> {
+        val hasArgs = check(TokenType.LeftParenthesis)
 
-                if (peek()?.type is TokenType.Identifier) {
-                    parameters.add(advance()!!)
-                } else {
-                    parseError("Expect parameter name.")
-                }
-            } while (match(TokenType.Comma) != null)
+        val parameters = mutableListOf<Token>()
+        if (hasArgs) {
+            consume(TokenType.LeftParenthesis, "Expect '(' after $kind name.")
+            if (!check(TokenType.RightParenthesis)) {
+                do {
+                    if (parameters.size >= 255) {
+                        errors.recordError(peek() ?: tokens.last(), "Can't have more than 255 parameters.")
+                    }
+
+                    if (peek()?.type is TokenType.Identifier) {
+                        parameters.add(advance()!!)
+                    } else {
+                        parseError("Expect parameter name.")
+                    }
+                } while (match(TokenType.Comma) != null)
+            }
+
+            consume(TokenType.RightParenthesis, "Expect ')' after parameters.")
         }
 
-        consume(TokenType.RightParenthesis, "Expect ')' after parameters.")
         consume(TokenType.LeftBrace, "Expect '{' before $kind body.")
         val body = block(sourceLine, breakable = false)
 
-        return parameters to body
+        return Triple(parameters, body, !hasArgs)
     }
 
     private fun expression(): Expression {
@@ -387,7 +392,10 @@ private class Parser(private val tokens: List<Token>) {
 
         if (next.type == TokenType.Keyword.Fun) {
             advance()
-            val (parameters, body) = function(next.line, "function")
+            val (parameters, body, getter) = function(next.line, "function")
+            if (getter) {
+                parseError("Cannot define a getter as an expression.")
+            }
             return Expression.Function(parameters, body)
         }
 

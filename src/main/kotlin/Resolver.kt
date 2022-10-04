@@ -29,7 +29,7 @@ class Resolver(private val interpreter: Interpreter) {
 
                 currentClass = ClassType.Static
                 statement.classMethods.forEach {
-                    resolveFunction(it.parameters, it.body, FunctionType.Function)
+                    resolveFunction(it.parameters, it.body, it.getter, FunctionType.Function)
                 }
 
                 currentClass = ClassType.Class
@@ -38,7 +38,7 @@ class Resolver(private val interpreter: Interpreter) {
                     VariableResolution(initialised = true, read = true, index = 0, line = statement.sourceLine)
                 statement.instanceMethods.forEach {
                     val functionType = if (it.name.lexeme == "init") FunctionType.Initialiser else FunctionType.Method
-                    resolveFunction(it.parameters, it.body, functionType)
+                    resolveFunction(it.parameters, it.body, it.getter, functionType)
                 }
                 endScope()
                 currentClass = enclosingClass
@@ -49,7 +49,7 @@ class Resolver(private val interpreter: Interpreter) {
                 declare(statement.name.type.asString, statement.sourceLine)
                 define(statement.name.type.asString, statement.sourceLine)
 
-                resolveFunction(statement.parameters, statement.body, FunctionType.Function)
+                resolveFunction(statement.parameters, statement.body, statement.getter, FunctionType.Function)
             }
 
             is Statement.If -> {
@@ -107,7 +107,7 @@ class Resolver(private val interpreter: Interpreter) {
                 expr.arguments.forEach(::resolve)
             }
 
-            is Expression.Function -> resolveFunction(expr.parameters, expr.body, FunctionType.Function)
+            is Expression.Function -> resolveFunction(expr.parameters, expr.body, false, FunctionType.Function)
             is Expression.Get -> resolve(expr.obj)
             is Expression.Grouping -> resolve(expr.expression)
             is Expression.Literal -> {}
@@ -149,7 +149,14 @@ class Resolver(private val interpreter: Interpreter) {
         }
     }
 
-    private fun resolveFunction(parameters: List<Token>, body: Statement.Block, kind: FunctionType) {
+    private fun resolveFunction(parameters: List<Token>, body: Statement.Block, getter: Boolean, kind: FunctionType) {
+        if (getter && kind != FunctionType.Method) {
+            recordError(
+                body.sourceLine,
+                "{",
+                "Only methods can be getters."
+            )
+        }
         val enclosing = currentFunction
         currentFunction = kind
 
@@ -213,7 +220,7 @@ class Resolver(private val interpreter: Interpreter) {
     }
 
     private fun recordError(line: Int, lexeme: String, message: String) {
-        errors.add("[line $line] Error at $lexeme: $message")
+        errors.add("[line $line] Error at `$lexeme`: $message")
     }
 }
 

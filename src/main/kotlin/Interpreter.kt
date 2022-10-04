@@ -1,6 +1,6 @@
 class Interpreter(private val io: IO) {
     private val builtins: MutableMap<String, LoxValue> = mutableMapOf(
-        "clock" to LoxValue.Function("clock", 0, Scope(mutableMapOf())) { _, _, _ -> LoxValue.Number(io.currentTime()) }
+        "clock" to LoxValue.Function("clock", 0, Scope(mutableMapOf()), false) { _, _, _ -> LoxValue.Number(io.currentTime()) }
     )
 
     private var scope = Scope(builtins)
@@ -49,7 +49,7 @@ class Interpreter(private val io: IO) {
             is Statement.ClassDeclaration -> {
                 scope.define(null)
                 val classMethods = statement.classMethods.associateBy( { it.name.lexeme }, {
-                    LoxValue.Function(it.name.lexeme, it.parameters.size, scope, buildFunctionImpl(it.parameters, it.body, false))
+                    LoxValue.Function(it.name.lexeme, it.parameters.size, scope, it.getter, buildFunctionImpl(it.parameters, it.body, false))
                 })
                 val methods = statement.instanceMethods.associateBy({ it.name.lexeme },
                     {
@@ -57,6 +57,7 @@ class Interpreter(private val io: IO) {
                             it.name.lexeme,
                             it.parameters.size,
                             scope,
+                            it.getter,
                             buildFunctionImpl(it.parameters, it.body, it.name.lexeme == "init")
                         )
                     })
@@ -83,7 +84,7 @@ class Interpreter(private val io: IO) {
 
             is Statement.Function -> {
                 val function = LoxValue.Function(
-                    statement.name.type.asString, statement.parameters.size, scope,
+                    statement.name.type.asString, statement.parameters.size, scope, statement.getter,
                     buildFunctionImpl(statement.parameters, statement.body, false)
                 )
                 scope.define(function)
@@ -179,16 +180,27 @@ class Interpreter(private val io: IO) {
             }
 
             is Expression.Function -> {
-                LoxValue.Function("[anon]", expr.parameters.size, scope, buildFunctionImpl(expr.parameters, expr.body, false))
+                LoxValue.Function("[anon]", expr.parameters.size, scope, false, buildFunctionImpl(expr.parameters, expr.body, false))
             }
 
             is Expression.Get -> {
                 when (val obj = evaluate(expr.obj, expr.name.line)) {
                     is LoxValue.LoxInstance -> {
-                        obj[expr.name.lexeme] ?: throw InterpreterResult.Error(
-                            expr.name.line,
-                            "Undefined property `${expr.name.lexeme}`."
-                        )
+                        when (val value = obj[expr.name.lexeme]) {
+                            is LoxValue.Function -> {
+                                if (value.getter) {
+                                    value.call(this, value.closure, listOf())
+                                } else {
+                                    value
+                                }
+                            }
+                            null ->
+                                throw InterpreterResult.Error(
+                                    expr.name.line,
+                                    "Undefined property `${expr.name.lexeme}`."
+                                )
+                            else -> value
+                        }
                     }
                     is LoxValue.LoxClass -> {
                         obj.classMethods[expr.name.lexeme] ?: throw InterpreterResult.Error(

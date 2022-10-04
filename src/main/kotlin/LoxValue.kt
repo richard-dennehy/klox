@@ -16,12 +16,13 @@ sealed class LoxValue(val asString: String) {
         private val name: String,
         val arity: Int,
         val closure: Scope,
+        val getter: Boolean,
         val call: (Interpreter, Scope, List<LoxValue>) -> LoxValue
     ) : LoxValue("fn <$name>") {
         internal fun bind(instance: LoxInstance): Function {
             val scope = Scope(closure.builtins, closure)
             scope.define(instance)
-            return Function(name, arity, scope, call)
+            return Function(name, arity, scope, getter, call)
         }
     }
 
