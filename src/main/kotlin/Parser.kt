@@ -183,6 +183,17 @@ private class Parser(private val tokens: List<Token>) {
         } else {
             parseError("Expect class name.")
         }
+
+        val superclass = if (match(TokenType.LessThan) != null) {
+            if (peek()?.type is TokenType.Identifier) {
+                Expression.Variable(advance()!!)
+            } else {
+                parseError("Expect superclass name.")
+            }
+        } else {
+            null
+        }
+
         consume(TokenType.LeftBrace, "Expect '{' before class body.")
 
         val instanceMethods = mutableListOf<Statement.Function>()
@@ -198,10 +209,9 @@ private class Parser(private val tokens: List<Token>) {
 
         consume(TokenType.RightBrace, "Expect '}' after class body.")
 
-        return Statement.ClassDeclaration(name, instanceMethods, classMethods)
+        return Statement.ClassDeclaration(name, instanceMethods, classMethods, superclass)
     }
 
-    // TODO could probably simplify this to rewrite all expressions `fun name(args) {...}` to `var name = fun (args) {...}` but need to implement class methods first
     private fun namedFunction(kind: String): Statement.Function {
         val name = if (peek()?.type is TokenType.Identifier) {
             advance()!!
@@ -397,6 +407,17 @@ private class Parser(private val tokens: List<Token>) {
                 parseError("Cannot define a getter as an expression.")
             }
             return Expression.Function(parameters, body)
+        }
+
+        if (next.type == TokenType.Keyword.Super) {
+            val token = advance()!!
+            consume(TokenType.Dot, "Expect `.` after `super`.")
+            val method = if (peek()?.type is TokenType.Identifier) {
+                advance()!!
+            } else {
+                parseError("Expect superclass method name.")
+            }
+            return Expression.Super(token, method)
         }
 
         parseError("Expected expression.")

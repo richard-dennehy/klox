@@ -27,12 +27,31 @@ class Resolver(private val interpreter: Interpreter) {
                 declare(statement.name.lexeme, statement.sourceLine)
                 define(statement.name.lexeme, statement.sourceLine)
 
+                if (statement.superclass != null) {
+                    if (statement.superclass.name.lexeme == statement.name.lexeme) {
+                        recordError(statement.sourceLine, statement.superclass.name.lexeme, "A class can't inherit from itself.")
+                    }
+                    resolve(statement.superclass)
+                    beginScope()
+                    scopes.peek()["super"] = VariableResolution(
+                        initialised = true,
+                        read = true,
+                        index = 0,
+                        line = statement.sourceLine
+                    )
+                }
+
                 currentClass = ClassType.Static
                 statement.classMethods.forEach {
                     resolveFunction(it.parameters, it.body, it.getter, FunctionType.Function)
                 }
 
-                currentClass = ClassType.Class
+                currentClass = if (statement.superclass != null) {
+                    ClassType.Subclass
+                } else {
+                    ClassType.Class
+                }
+
                 beginScope()
                 scopes.peek()["this"] =
                     VariableResolution(initialised = true, read = true, index = 0, line = statement.sourceLine)
@@ -41,6 +60,10 @@ class Resolver(private val interpreter: Interpreter) {
                     resolveFunction(it.parameters, it.body, it.getter, functionType)
                 }
                 endScope()
+                if (statement.superclass != null) {
+                    endScope()
+                }
+
                 currentClass = enclosingClass
             }
 
@@ -121,9 +144,18 @@ class Resolver(private val interpreter: Interpreter) {
                 resolve(expr.obj)
             }
 
+            is Expression.Super -> {
+                when (currentClass) {
+                    ClassType.Class -> recordError(expr.token.line, expr.token.lexeme, "Can't use `super` in a class with no superclass.")
+                    ClassType.Static -> recordError(expr.token.line, expr.token.lexeme, "Can't use `super` in a static class method.")
+                    ClassType.Subclass -> resolveLocal(expr, expr.token)
+                    ClassType.None -> recordError(expr.token.line, expr.token.lexeme, "Can't use `super` outside a class.")
+                }
+            }
+
             is Expression.This -> {
                 when (currentClass) {
-                    ClassType.Class ->
+                    ClassType.Class, ClassType.Subclass ->
                         resolveLocal(expr, expr.token)
 
                     ClassType.Static ->
@@ -234,6 +266,7 @@ enum class FunctionType {
 enum class ClassType {
     Class,
     Static,
+    Subclass,
     None,
 }
 

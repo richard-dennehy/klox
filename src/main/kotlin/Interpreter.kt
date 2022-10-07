@@ -1,6 +1,11 @@
 class Interpreter(private val io: IO) {
     private val builtins: MutableMap<String, LoxValue> = mutableMapOf(
-        "clock" to LoxValue.Function("clock", 0, Scope(mutableMapOf()), false) { _, _, _ -> LoxValue.Number(io.currentTime()) }
+        "clock" to LoxValue.Function(
+            "clock",
+            0,
+            Scope(mutableMapOf()),
+            false
+        ) { _, _, _ -> LoxValue.Number(io.currentTime()) }
     )
 
     private var scope = Scope(builtins)
@@ -48,9 +53,28 @@ class Interpreter(private val io: IO) {
 
             is Statement.ClassDeclaration -> {
                 scope.define(null)
-                val classMethods = statement.classMethods.associateBy( { it.name.lexeme }, {
-                    LoxValue.Function(it.name.lexeme, it.parameters.size, scope, it.getter, buildFunctionImpl(it.parameters, it.body, false))
+                val classMethods = statement.classMethods.associateBy({ it.name.lexeme }, {
+                    LoxValue.Function(
+                        it.name.lexeme,
+                        it.parameters.size,
+                        scope,
+                        it.getter,
+                        buildFunctionImpl(it.parameters, it.body, false)
+                    )
                 })
+
+                val superclass = statement.superclass?.let {
+                    val superclass = evaluate(it, statement.sourceLine)
+                    if (superclass !is LoxValue.LoxClass) {
+                        throw InterpreterResult.Error(statement.sourceLine, "Superclass must be a class.")
+                    }
+                    superclass
+                }
+
+                if (superclass != null) {
+                    scope = Scope(scope.builtins, scope)
+                    scope.define(superclass)
+                }
                 val methods = statement.instanceMethods.associateBy({ it.name.lexeme },
                     {
                         LoxValue.Function(
@@ -61,8 +85,18 @@ class Interpreter(private val io: IO) {
                             buildFunctionImpl(it.parameters, it.body, it.name.lexeme == "init")
                         )
                     })
+                if (superclass != null) {
+                    scope = scope.parent!!
+                }
                 scope.values[scope.values.lastIndex] =
-                    VariableState.Initialised(LoxValue.LoxClass(statement.name.lexeme, methods, classMethods))
+                    VariableState.Initialised(
+                        LoxValue.LoxClass(
+                            statement.name.lexeme,
+                            methods,
+                            classMethods,
+                            superclass
+                        )
+                    )
                 statement.name.lexeme
             }
 
@@ -180,7 +214,13 @@ class Interpreter(private val io: IO) {
             }
 
             is Expression.Function -> {
-                LoxValue.Function("[anon]", expr.parameters.size, scope, false, buildFunctionImpl(expr.parameters, expr.body, false))
+                LoxValue.Function(
+                    "[anon]",
+                    expr.parameters.size,
+                    scope,
+                    false,
+                    buildFunctionImpl(expr.parameters, expr.body, false)
+                )
             }
 
             is Expression.Get -> {
@@ -194,14 +234,17 @@ class Interpreter(private val io: IO) {
                                     value
                                 }
                             }
+
                             null ->
                                 throw InterpreterResult.Error(
                                     expr.name.line,
                                     "Undefined property `${expr.name.lexeme}`."
                                 )
+
                             else -> value
                         }
                     }
+
                     is LoxValue.LoxClass -> {
                         obj.classMethods[expr.name.lexeme] ?: throw InterpreterResult.Error(
                             expr.name.line,
@@ -225,6 +268,26 @@ class Interpreter(private val io: IO) {
                     else ->
                         throw InterpreterResult.Error(expr.name.line, "Only instances have properties.")
                 }
+            }
+
+            is Expression.Super -> {
+                val metadata = locals[expr] ?: throw RuntimeException("`super` not resolved correctly")
+                val superclass = scope.getAt(expr.token, metadata)
+                if (superclass !is LoxValue.LoxClass) {
+                    throw RuntimeException("`super` resolved to a non-class value")
+                }
+
+                // hack to fish out `this` reference for class instance (`this` is always bound in the first inner scope relative to `super`)
+                val instanceMetadata = VariableMetadata(metadata.depth - 1, 0)
+                val instance = scope.getAt(expr.token, instanceMetadata)
+                if (instance !is LoxValue.LoxInstance) {
+                    throw RuntimeException("Failed to resolve `this`")
+                }
+
+                return superclass.findMethod(expr.method.lexeme)?.bind(instance) ?: throw InterpreterResult.Error(
+                    sourceLine,
+                    "Undefined property ${expr.method.lexeme}"
+                )
             }
 
             is Expression.This -> {
@@ -354,7 +417,7 @@ class Interpreter(private val io: IO) {
     }
 }
 
-class Scope(internal val builtins: MutableMap<String, LoxValue>, private val parent: Scope? = null) {
+class Scope(internal val builtins: MutableMap<String, LoxValue>, internal val parent: Scope? = null) {
     internal val values: MutableList<VariableState> = mutableListOf()
 
     internal fun getAt(name: Token, metadata: VariableMetadata?): LoxValue = if (metadata != null) {

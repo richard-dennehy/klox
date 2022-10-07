@@ -19,14 +19,19 @@ sealed class LoxValue(val asString: String) {
         val getter: Boolean,
         val call: (Interpreter, Scope, List<LoxValue>) -> LoxValue
     ) : LoxValue("fn <$name>") {
-        internal fun bind(instance: LoxInstance): Function {
+        fun bind(instance: LoxInstance): Function {
             val scope = Scope(closure.builtins, closure)
             scope.define(instance)
             return Function(name, arity, scope, getter, call)
         }
     }
 
-    class LoxClass(name: String, internal val instanceMethods: Map<String, Function>, val classMethods: Map<String, Function>) : LoxValue(name) {
+    class LoxClass(
+        name: String,
+        internal val instanceMethods: Map<String, Function>,
+        val classMethods: Map<String, Function>,
+        internal val superclass: LoxClass?
+    ) : LoxValue(name) {
         operator fun invoke(interpreter: Interpreter, arguments: List<LoxValue>): LoxInstance {
             val instance = LoxInstance(this, mutableMapOf())
             val initialiser = instanceMethods["init"]
@@ -34,6 +39,8 @@ sealed class LoxValue(val asString: String) {
             bound?.call?.invoke(interpreter, bound.closure, arguments)
             return instance
         }
+
+        fun findMethod(name: String): Function? = instanceMethods[name] ?: superclass?.instanceMethods?.get(name)
 
         val arity = instanceMethods["init"]?.arity ?: 0
     }
@@ -44,7 +51,7 @@ sealed class LoxValue(val asString: String) {
             val field = fields[name]
             if (field != null) return field
 
-            val method = klass.instanceMethods[name]
+            val method = klass.findMethod(name)
             return method?.bind(this)
         }
 

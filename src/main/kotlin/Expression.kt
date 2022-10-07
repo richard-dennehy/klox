@@ -18,6 +18,7 @@ sealed interface Expression {
     class Get(val obj: Expression, val name: Token): Expression
     class Set(val obj: Expression, val name: Token, val value: Expression): Expression
     class This(val token: Token): Expression
+    class Super(val token: Token, val method: Token): Expression
 }
 
 sealed interface Statement {
@@ -40,7 +41,7 @@ sealed interface Statement {
         override val sourceLine = name.line
     }
     data class Return(val value: Expression?, override val sourceLine: Int): Statement
-    data class ClassDeclaration(val name: Token, val instanceMethods: List<Function>, val classMethods: List<Function>): Statement {
+    data class ClassDeclaration(val name: Token, val instanceMethods: List<Function>, val classMethods: List<Function>, val superclass: Expression.Variable?): Statement {
         override val sourceLine = name.line
     }
 }
